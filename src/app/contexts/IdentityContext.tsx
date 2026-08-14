@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { userProfileService, AddressComponents } from "../services/userProfileService";
+import { hydrateIdentityFromBackend } from "../services/backendAuthService";
 import type { UserRole, Permission } from "../admin/types/index";
 import { getPermissionsForRole } from "../admin/permissions";
 
@@ -111,6 +112,14 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
 
   const refreshIdentity = useCallback(() => {
     setIdentity(buildIdentity());
+  }, []);
+
+  // On mount: if we have a stored access token, fetch /users/me so that the
+  // backend DB is authoritative — not stale localStorage from a prior session.
+  // This ensures profile data is correct after a page refresh.
+  useEffect(() => {
+    hydrateIdentityFromBackend().then(() => refreshIdentity()).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
