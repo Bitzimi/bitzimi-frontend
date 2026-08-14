@@ -65,13 +65,13 @@ function clearTokens(): void {
  * acquisition, and page-load hydration reflects the real backend state.
  * This is the single point that makes the backend the source of truth.
  */
-async function syncIdentityFromBackend(accessToken: string): Promise<void> {
-  if (!API_BASE) return;
+async function syncIdentityFromBackend(accessToken: string): Promise<{ ok: boolean; status?: number }> {
+  if (!API_BASE) return { ok: false };
   try {
     const r = await fetch(`${API_BASE}/api/v1/users/me`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!r.ok) return;
+    if (!r.ok) return { ok: false, status: r.status };
     const json = await r.json();
     const data = json?.data;
     if (!data) return;
@@ -121,8 +121,10 @@ async function syncIdentityFromBackend(accessToken: string): Promise<void> {
     }
 
     window.dispatchEvent(new CustomEvent("identity-updated"));
+    return { ok: true };
   } catch {
     // Network or parse error — identity remains unchanged until next sync
+    return { ok: false };
   }
 }
 
@@ -134,7 +136,28 @@ async function syncIdentityFromBackend(accessToken: string): Promise<void> {
 export async function hydrateIdentityFromBackend(): Promise<void> {
   const token = getStoredAccessToken();
   if (!token) return;
-  await syncIdentityFromBackend(token);
+
+  const result = await syncIdentityFromBackend(token);
+  if (result.ok) return;
+
+  // If the access token is expired, try the refresh token before logging out.
+  // If the backend says the session/user is no longer valid (for example the
+  // user was deleted), clear the local session so the browser cannot remain
+  // visually logged in to an account that no longer exists.
+  if (result.status === 401 || result.status === 403 || result.status === 404) {
+    const refreshed = await refreshBackendToken();
+    if (refreshed) {
+      const newToken = getStoredAccessToken();
+      if (newToken) {
+        const hydrated = await syncIdentityFromBackend(newToken);
+        if (hydrated.ok) return;
+      }
+    }
+
+    clearTokens();
+    clearIdentityStorage();
+    window.dispatchEvent(new CustomEvent("identity-updated"));
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -308,6 +331,8 @@ export async function refreshBackendToken(): Promise<boolean> {
     });
     if (!res.ok) {
       clearTokens();
+      clearIdentityStorage();
+      window.dispatchEvent(new CustomEvent("identity-updated"));
       return false;
     }
     const data = await res.json();
