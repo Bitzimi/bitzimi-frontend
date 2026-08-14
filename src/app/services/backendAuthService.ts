@@ -74,7 +74,7 @@ async function syncIdentityFromBackend(accessToken: string): Promise<{ ok: boole
     if (!r.ok) return { ok: false, status: r.status };
     const json = await r.json();
     const data = json?.data;
-    if (!data) return;
+    if (!data) return { ok: false };
 
     // ── bitzimiUser (core auth + profile identity) ────────────────────────
     const stored = localStorage.getItem("bitzimiUser");
@@ -90,8 +90,8 @@ async function syncIdentityFromBackend(accessToken: string): Promise<{ ok: boole
     // Sync profile fields — backend wins when present; preserves local-only
     // values (e.g. a locally-set fullName) only when the DB field is null/absent.
     const p = data.profile;
-    if (p?.username)            user.username = p.username;
-    if (p?.fullName != null)    user.fullName = p.fullName;
+    if (p?.username)         user.username = p.username;
+    if (p?.fullName != null) user.fullName = p.fullName;
 
     localStorage.setItem("bitzimiUser", JSON.stringify(user));
 
@@ -99,14 +99,22 @@ async function syncIdentityFromBackend(accessToken: string): Promise<{ ok: boole
     // Merge only the fields the backend knows about; preserve phone/address
     // and other local-only fields that the /users/me response doesn't include.
     const storedProfile = localStorage.getItem("bitzimiUserProfile");
-    const localProfile  = storedProfile ? (() => { try { return JSON.parse(storedProfile); } catch { return {}; } })() : {};
+    const localProfile  = storedProfile
+      ? (() => {
+          try {
+            return JSON.parse(storedProfile);
+          } catch {
+            return {};
+          }
+        })()
+      : {};
 
-    if (p?.username)            localProfile.username = p.username;
-    if (p?.fullName != null)    localProfile.fullName = p.fullName;
-    if (data.email)             localProfile.email    = data.email;
+    if (p?.username)         localProfile.username = p.username;
+    if (p?.fullName != null) localProfile.fullName = p.fullName;
+    if (data.email)          localProfile.email = data.email;
 
     // Sync avatar URL from backend (e.g. uploaded on another device/browser).
-    if (p?.avatarUrl)           localProfile.avatarUrl = p.avatarUrl;
+    if (p?.avatarUrl) localProfile.avatarUrl = p.avatarUrl;
 
     localStorage.setItem("bitzimiUserProfile", JSON.stringify(localProfile));
 
@@ -117,7 +125,10 @@ async function syncIdentityFromBackend(accessToken: string): Promise<{ ok: boole
 
     // ── KYC / verification status ─────────────────────────────────────────
     if (data.verification?.status) {
-      localStorage.setItem("bitzimiVerification", JSON.stringify({ status: data.verification.status }));
+      localStorage.setItem(
+        "bitzimiVerification",
+        JSON.stringify({ status: data.verification.status }),
+      );
     }
 
     window.dispatchEvent(new CustomEvent("identity-updated"));
@@ -172,6 +183,7 @@ export async function loginWithBackend(
   password: string,
 ): Promise<LoginResult> {
   if (!API_BASE) return { ok: false, networkError: true };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
       method: "POST",
@@ -182,32 +194,56 @@ export async function loginWithBackend(
     if (res.ok) {
       const data = await res.json();
       const body = data.data;
+
       // 2FA challenge — backend signals that a TOTP code is required
       if (body?.requiresTwoFactor === true) {
-        return { ok: false, requiresTwoFactor: true, twoFactorToken: body.twoFactorToken };
+        return {
+          ok: false,
+          requiresTwoFactor: true,
+          twoFactorToken: body.twoFactorToken,
+        };
       }
+
       const tokens: BackendTokens = body;
       storeTokens(tokens);
       await syncIdentityFromBackend(tokens.accessToken);
+
       return { ok: true, tokens };
     }
 
     // Structured error from backend
-    let errorCode    = "UNKNOWN";
+    let errorCode = "UNKNOWN";
     let errorMessage = "Authentication failed";
+
     try {
       const body = await res.json();
-      errorCode    = body?.error?.code    ?? errorCode;
+      errorCode = body?.error?.code ?? errorCode;
       errorMessage = body?.error?.message ?? errorMessage;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
-    return { ok: false, statusCode: res.status, errorCode, errorMessage };
+    return {
+      ok: false,
+      statusCode: res.status,
+      errorCode,
+      errorMessage,
+    };
   } catch {
     return { ok: false, networkError: true };
   }
 }
 
-/** Register via backend. On 409 (already exists), attempts login instead. */
+/**
+ * Register via backend.
+ *
+ * IMPORTANT:
+ * Registration does NOT authenticate the user.
+ * The backend creates the account and sends the verification email,
+ * but no access/refresh tokens are stored here.
+ *
+ * The user must verify the email first and then use the normal login flow.
+ */
 export async function registerWithBackend(
   email:          string,
   password:       string,
@@ -217,11 +253,25 @@ export async function registerWithBackend(
   affiliateCode?: string,
 ): Promise<boolean> {
   if (!API_BASE) return false;
+
   try {
-    const body: Record<string, string> = { email, password, username };
-    if (fullName)      body.fullName      = fullName;
-    if (referralCode)  body.referralCode  = referralCode;
-    if (affiliateCode) body.affiliateCode = affiliateCode;
+    const body: Record<string, string> = {
+      email,
+      password,
+      username,
+    };
+
+    if (fullName) {
+      body.fullName = fullName;
+    }
+
+    if (referralCode) {
+      body.referralCode = referralCode;
+    }
+
+    if (affiliateCode) {
+      body.affiliateCode = affiliateCode;
+    }
 
     const res = await fetch(`${API_BASE}/api/v1/auth/register`, {
       method: "POST",
@@ -230,17 +280,22 @@ export async function registerWithBackend(
     });
 
     if (!res.ok) {
-      if (res.status === 409) {
-        const result = await loginWithBackend(email, password);
-        return result.ok;
-      }
+      // Do NOT automatically log in on 409.
+      // An existing account must go through the normal login flow,
+      // which enforces backend email-verification requirements.
       return false;
     }
 
-    const data = await res.json();
-    const tokens: BackendTokens = data.data;
-    storeTokens(tokens);
-    await syncIdentityFromBackend(tokens.accessToken);
+    // Registration is intentionally NOT an authentication event.
+    //
+    // Do not:
+    // - store access/refresh tokens
+    // - call syncIdentityFromBackend()
+    // - create an authenticated local session
+    //
+    // The backend registration endpoint creates the account and sends
+    // the verification email. The user must verify the email and then
+    // explicitly log in.
     return true;
   } catch {
     return false;
@@ -254,30 +309,44 @@ export async function registerWithBackend(
  */
 export async function complete2FAChallenge(
   twoFactorToken: string,
-  totpCode:        string,
+  totpCode: string,
 ): Promise<LoginResult> {
   if (!API_BASE) return { ok: false, networkError: true };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/2fa-challenge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ twoFactorToken, totpCode }),
     });
+
     if (res.ok) {
       const data = await res.json();
       const tokens: BackendTokens = data.data;
+
       storeTokens(tokens);
       await syncIdentityFromBackend(tokens.accessToken);
+
       return { ok: true, tokens };
     }
-    let errorCode    = "INVALID_2FA_CODE";
+
+    let errorCode = "INVALID_2FA_CODE";
     let errorMessage = "Invalid authenticator code";
+
     try {
       const body = await res.json();
-      errorCode    = body?.error?.code    ?? errorCode;
+      errorCode = body?.error?.code ?? errorCode;
       errorMessage = body?.error?.message ?? errorMessage;
-    } catch { /* ignore */ }
-    return { ok: false, statusCode: res.status, errorCode, errorMessage };
+    } catch {
+      /* ignore */
+    }
+
+    return {
+      ok: false,
+      statusCode: res.status,
+      errorCode,
+      errorMessage,
+    };
   } catch {
     return { ok: false, networkError: true };
   }
@@ -286,12 +355,16 @@ export async function complete2FAChallenge(
 /** Check if the currently-authenticated user has 2FA enabled on the backend. */
 export async function check2FAStatus(): Promise<boolean> {
   const accessToken = getStoredAccessToken();
+
   if (!API_BASE || !accessToken) return false;
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/users/me/2fa`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+
     if (!res.ok) return false;
+
     const data = await res.json();
     return data?.data?.enabled === true;
   } catch {
@@ -302,16 +375,19 @@ export async function check2FAStatus(): Promise<boolean> {
 /** Verify a TOTP code against the backend. Returns true on success. */
 export async function verify2FACode(token: string): Promise<boolean> {
   const accessToken = getStoredAccessToken();
+
   if (!API_BASE || !accessToken) return false;
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/users/me/2fa/verify`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization:  `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({ token }),
     });
+
     return res.ok;
   } catch {
     return false;
@@ -321,22 +397,28 @@ export async function verify2FACode(token: string): Promise<boolean> {
 /** Refresh the access token using the stored refresh token. */
 export async function refreshBackendToken(): Promise<boolean> {
   if (!API_BASE) return false;
+
   const refreshToken = getStoredRefreshToken();
+
   if (!refreshToken) return false;
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
+
     if (!res.ok) {
       clearTokens();
       clearIdentityStorage();
       window.dispatchEvent(new CustomEvent("identity-updated"));
       return false;
     }
+
     const data = await res.json();
     storeTokens(data.data);
+
     return true;
   } catch {
     return false;
@@ -358,9 +440,12 @@ function clearIdentityStorage(): void {
 /** Revoke the refresh token on the backend, then clear all local identity state. */
 export async function logoutFromBackend(): Promise<void> {
   const refreshToken = getStoredRefreshToken();
+
   clearTokens();
   clearIdentityStorage();
+
   if (!API_BASE || !refreshToken) return;
+
   try {
     await fetch(`${API_BASE}/api/v1/auth/logout`, {
       method: "POST",
@@ -386,12 +471,14 @@ export interface ForgotPasswordResult {
 
 export async function requestPasswordReset(email: string): Promise<ForgotPasswordResult> {
   if (!API_BASE) return { ok: false, networkError: true };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/forgot-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
+
     return { ok: res.ok };
   } catch {
     return { ok: false, networkError: true };
@@ -409,18 +496,25 @@ export async function resetPasswordWithToken(
   newPassword: string,
 ): Promise<ResetPasswordResult> {
   if (!API_BASE) return { ok: false, networkError: true };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, newPassword }),
     });
+
     if (res.ok) return { ok: true };
+
     let errorCode = "TOKEN_INVALID";
+
     try {
       const body = await res.json();
       errorCode = body?.error?.code ?? errorCode;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
+
     return { ok: false, errorCode };
   } catch {
     return { ok: false, networkError: true };
@@ -436,14 +530,18 @@ export interface VerifyEmailResult {
 }
 
 /** Request a new verification email for the given address. Always returns ok unless network fails. */
-export async function sendVerificationEmailFrontend(email: string): Promise<{ ok: boolean; networkError?: boolean }> {
+export async function sendVerificationEmailFrontend(
+  email: string,
+): Promise<{ ok: boolean; networkError?: boolean }> {
   if (!API_BASE) return { ok: false, networkError: true };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/send-verification`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
+
     return { ok: res.ok };
   } catch {
     return { ok: false, networkError: true };
@@ -453,18 +551,25 @@ export async function sendVerificationEmailFrontend(email: string): Promise<{ ok
 /** Verify an email address using the raw token from the link. */
 export async function verifyEmailToken(token: string): Promise<VerifyEmailResult> {
   if (!API_BASE) return { ok: false, networkError: true };
+
   try {
     const res = await fetch(`${API_BASE}/api/v1/auth/verify-email`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
     });
+
     if (res.ok) return { ok: true };
+
     let errorCode = "TOKEN_INVALID";
+
     try {
       const body = await res.json();
       errorCode = body?.error?.code ?? errorCode;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
+
     return { ok: false, errorCode };
   } catch {
     return { ok: false, networkError: true };
@@ -485,24 +590,38 @@ export async function deactivateAccount(
   totpToken?: string,
 ): Promise<DeactivateAccountResult> {
   const accessToken = getStoredAccessToken();
-  if (!API_BASE || !accessToken) return { ok: false, networkError: true };
+
+  if (!API_BASE || !accessToken) {
+    return { ok: false, networkError: true };
+  }
+
   try {
     const body: Record<string, string> = { password };
-    if (totpToken) body.totpToken = totpToken;
+
+    if (totpToken) {
+      body.totpToken = totpToken;
+    }
+
     const res = await fetch(`${API_BASE}/api/v1/users/me/deactivate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization:  `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify(body),
     });
+
     if (res.ok) return { ok: true };
+
     let errorCode = "UNKNOWN";
+
     try {
       const json = await res.json();
       errorCode = json?.error?.code ?? errorCode;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
+
     return { ok: false, errorCode };
   } catch {
     return { ok: false, networkError: true };
