@@ -58,7 +58,13 @@ function clearTokens(): void {
   localStorage.removeItem(REFRESH_KEY);
 }
 
-/** Fetch /users/me and merge backend identity (id, role, permissions, codes) into localStorage. */
+/**
+ * Fetch /users/me and write backend-authoritative identity into localStorage.
+ *
+ * Syncs ALL identity fields — not just id/role — so that every login, token
+ * acquisition, and page-load hydration reflects the real backend state.
+ * This is the single point that makes the backend the source of truth.
+ */
 async function syncIdentityFromBackend(accessToken: string): Promise<void> {
   if (!API_BASE) return;
   try {
@@ -70,10 +76,10 @@ async function syncIdentityFromBackend(accessToken: string): Promise<void> {
     const data = json?.data;
     if (!data) return;
 
+    // ── bitzimiUser (core auth + profile identity) ────────────────────────
     const stored = localStorage.getItem("bitzimiUser");
     const user   = stored ? JSON.parse(stored) : {};
 
-    // Always overwrite id with backend UUID — fixes the ID mismatch
     if (data.id)            user.id            = data.id;
     if (data.email)         user.email         = data.email;
     if (data.referralCode)  user.referralCode  = data.referralCode;
@@ -81,11 +87,54 @@ async function syncIdentityFromBackend(accessToken: string): Promise<void> {
     if (data.role)          user.role          = data.role;
     if (data.permissions)   user.permissions   = data.permissions;
 
+    // Sync profile fields — backend wins when present; preserves local-only
+    // values (e.g. a locally-set fullName) only when the DB field is null/absent.
+    const p = data.profile;
+    if (p?.username)            user.username = p.username;
+    if (p?.fullName != null)    user.fullName = p.fullName;
+
     localStorage.setItem("bitzimiUser", JSON.stringify(user));
+
+    // ── bitzimiUserProfile (extended profile used by userProfileService) ──
+    // Merge only the fields the backend knows about; preserve phone/address
+    // and other local-only fields that the /users/me response doesn't include.
+    const storedProfile = localStorage.getItem("bitzimiUserProfile");
+    const localProfile  = storedProfile ? (() => { try { return JSON.parse(storedProfile); } catch { return {}; } })() : {};
+
+    if (p?.username)            localProfile.username = p.username;
+    if (p?.fullName != null)    localProfile.fullName = p.fullName;
+    if (data.email)             localProfile.email    = data.email;
+
+    // Sync avatar URL from backend (e.g. uploaded on another device/browser).
+    if (p?.avatarUrl)           localProfile.avatarUrl = p.avatarUrl;
+
+    localStorage.setItem("bitzimiUserProfile", JSON.stringify(localProfile));
+
+    // ── userAvatar — prefer backend CDN URL when available ────────────────
+    if (p?.avatarUrl) {
+      localStorage.setItem("userAvatar", p.avatarUrl);
+    }
+
+    // ── KYC / verification status ─────────────────────────────────────────
+    if (data.verification?.status) {
+      localStorage.setItem("bitzimiVerification", JSON.stringify({ status: data.verification.status }));
+    }
+
     window.dispatchEvent(new CustomEvent("identity-updated"));
   } catch {
-    // ignore — identity will update on next poll
+    // Network or parse error — identity remains unchanged until next sync
   }
+}
+
+/**
+ * Hydrate identity from the backend using the currently-stored access token.
+ * Call on app load (page refresh) to ensure identity reflects the backend DB,
+ * not just what was cached in localStorage at last login.
+ */
+export async function hydrateIdentityFromBackend(): Promise<void> {
+  const token = getStoredAccessToken();
+  if (!token) return;
+  await syncIdentityFromBackend(token);
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -137,15 +186,17 @@ export async function loginWithBackend(
 
 /** Register via backend. On 409 (already exists), attempts login instead. */
 export async function registerWithBackend(
-  email:         string,
-  password:      string,
-  username:      string,
-  referralCode?: string,
+  email:          string,
+  password:       string,
+  username:       string,
+  fullName?:      string,
+  referralCode?:  string,
   affiliateCode?: string,
 ): Promise<boolean> {
   if (!API_BASE) return false;
   try {
     const body: Record<string, string> = { email, password, username };
+    if (fullName)      body.fullName      = fullName;
     if (referralCode)  body.referralCode  = referralCode;
     if (affiliateCode) body.affiliateCode = affiliateCode;
 
@@ -267,10 +318,23 @@ export async function refreshBackendToken(): Promise<boolean> {
   }
 }
 
-/** Revoke the refresh token on the backend, then clear local tokens. */
+/**
+ * Clear all user-scoped identity data from localStorage.
+ * Must be called on every logout path so that the next user to log in
+ * on this browser starts from a clean state and cannot see another user's data.
+ */
+function clearIdentityStorage(): void {
+  localStorage.removeItem("bitzimiUser");
+  localStorage.removeItem("bitzimiUserProfile");
+  localStorage.removeItem("userAvatar");
+  localStorage.removeItem("bitzimiVerification");
+}
+
+/** Revoke the refresh token on the backend, then clear all local identity state. */
 export async function logoutFromBackend(): Promise<void> {
   const refreshToken = getStoredRefreshToken();
   clearTokens();
+  clearIdentityStorage();
   if (!API_BASE || !refreshToken) return;
   try {
     await fetch(`${API_BASE}/api/v1/auth/logout`, {
@@ -279,7 +343,7 @@ export async function logoutFromBackend(): Promise<void> {
       body: JSON.stringify({ refreshToken }),
     });
   } catch {
-    // Ignore — tokens are already cleared from localStorage
+    // Ignore — tokens and identity are already cleared from localStorage
   }
 }
 
