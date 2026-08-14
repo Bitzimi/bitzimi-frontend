@@ -96,6 +96,7 @@ export function Register() {
         formData.email,
         formData.password,
         formData.username,
+        formData.fullName      || undefined,
         formData.referralCode  || undefined,
         formData.affiliateCode || undefined,
       );
