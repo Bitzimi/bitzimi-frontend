@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, Link } from "react-router";
+import { useSearchParams, Link, useNavigate } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -9,9 +9,12 @@ import { CheckCircle2, AlertCircle, Mail, Loader2 } from "lucide-react";
 import { verifyEmailToken, sendVerificationEmailFrontend } from "../services/backendAuthService";
 import logo from "../../imports/1000109381-1.png";
 import { usePlatform } from "../contexts/PlatformContext";
+import { useIdentity } from "../contexts/IdentityContext";
 
 export function VerifyEmail() {
   const { branding } = usePlatform();
+  const { identity } = useIdentity();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
 
@@ -25,6 +28,15 @@ export function VerifyEmail() {
   const [resendEmail, setResendEmail] = useState("");
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
+  // If this page is open in another tab and the user logs in there,
+  // IdentityContext receives the backend-authoritative identity update.
+  // Redirect this verification page into the authenticated platform.
+  useEffect(() => {
+    if (!token && identity.userId) {
+      navigate("/wallet", { replace: true });
+    }
+  }, [token, identity.userId, navigate]);
+
   // Auto-verify on mount if token is present
   useEffect(() => {
     if (!token) return;
@@ -32,6 +44,7 @@ export function VerifyEmail() {
 
     verifyEmailToken(token).then((result) => {
       if (cancelled) return;
+
       if (result.ok) {
         setStatus("success");
       } else {
@@ -40,13 +53,18 @@ export function VerifyEmail() {
       }
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const handleResend = async () => {
     if (!resendEmail || resendStatus === "sending") return;
+
     setResendStatus("sending");
+
     const result = await sendVerificationEmailFrontend(resendEmail);
+
     setResendStatus(result.networkError ? "error" : "sent");
   };
 
@@ -55,13 +73,21 @@ export function VerifyEmail() {
       <Card className="w-full max-w-md bg-gray-800/50 backdrop-blur-lg border-gray-700/80 shadow-2xl">
         <CardHeader className="space-y-0.5 pb-3">
           <div className="text-center mb-2">
-            <img src={branding.logoUrl || logo} alt={branding.name} className="h-9 mx-auto mb-1.5" />
-            <p className="text-xs text-purple-400/90">Play, Earn & Compete Securely</p>
+            <img
+              src={branding.logoUrl || logo}
+              alt={branding.name}
+              className="h-9 mx-auto mb-1.5"
+            />
+            <p className="text-xs text-purple-400/90">
+              Play, Earn & Compete Securely
+            </p>
           </div>
+
           <CardTitle className="text-xl text-white flex items-center gap-2">
             <Mail className="h-5 w-5 text-purple-400" />
             Email Verification
           </CardTitle>
+
           <CardDescription className="text-gray-400 text-sm">
             {status === "idle"
               ? "A verification link has been sent to your email."
@@ -87,9 +113,14 @@ export function VerifyEmail() {
             <div className="space-y-4">
               <div className="rounded-xl bg-green-500/10 border border-green-500/30 p-5 text-center">
                 <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto mb-3" />
-                <p className="text-green-300 font-semibold text-base">Email verified successfully!</p>
-                <p className="text-sm text-gray-400 mt-1">You can now sign in to your account.</p>
+                <p className="text-green-300 font-semibold text-base">
+                  Email verified successfully!
+                </p>
+                <p className="text-sm text-gray-400 mt-1">
+                  You can now sign in to your account.
+                </p>
               </div>
+
               <Link to="/login">
                 <Button className="w-full h-10 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800">
                   Sign In
@@ -101,14 +132,19 @@ export function VerifyEmail() {
           {/* Error state */}
           {status === "error" && (
             <div className="space-y-4">
-              <Alert variant="destructive" className="border-red-500/50 bg-red-950/30">
+              <Alert
+                variant="destructive"
+                className="border-red-500/50 bg-red-950/30"
+              >
                 <AlertCircle className="h-4 w-4" />
+
                 <AlertDescription className="text-sm">
                   {errorCode === "TOKEN_INVALID"
                     ? "This verification link has expired or has already been used."
                     : "Verification failed. Please request a new link."}
                 </AlertDescription>
               </Alert>
+
               <ResendForm
                 email={resendEmail}
                 setEmail={setResendEmail}
@@ -123,14 +159,22 @@ export function VerifyEmail() {
             <div className="space-y-4">
               <div className="rounded-xl bg-purple-500/10 border border-purple-500/30 p-5 text-center">
                 <Mail className="h-10 w-10 text-purple-400 mx-auto mb-3" />
-                <p className="text-purple-200 font-semibold">Check your inbox</p>
+
+                <p className="text-purple-200 font-semibold">
+                  Check your inbox
+                </p>
+
                 <p className="text-sm text-gray-400 mt-1">
-                  Click the link we sent to verify your email address. The link expires in 24 hours.
+                  Click the link we sent to verify your email address. The link
+                  expires in 24 hours.
                 </p>
               </div>
 
               <div className="border-t border-gray-700 pt-4">
-                <p className="text-sm text-gray-400 mb-3 text-center">Didn&apos;t receive it? Resend below.</p>
+                <p className="text-sm text-gray-400 mb-3 text-center">
+                  Didn&apos;t receive it? Resend below.
+                </p>
+
                 <ResendForm
                   email={resendEmail}
                   setEmail={setResendEmail}
@@ -142,7 +186,10 @@ export function VerifyEmail() {
           )}
 
           <div className="text-center text-sm">
-            <Link to="/login" className="text-gray-500 hover:text-gray-400 transition-colors">
+            <Link
+              to="/login"
+              className="text-gray-500 hover:text-gray-400 transition-colors"
+            >
               ← Back to Sign In
             </Link>
           </div>
@@ -153,7 +200,10 @@ export function VerifyEmail() {
 }
 
 function ResendForm({
-  email, setEmail, status, onResend,
+  email,
+  setEmail,
+  status,
+  onResend,
 }: {
   email: string;
   setEmail: (v: string) => void;
@@ -164,8 +214,10 @@ function ResendForm({
     return (
       <Alert className="border-green-500/50 bg-green-950/30 py-2">
         <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+
         <AlertDescription className="text-xs text-green-300">
-          If an account exists for that email, a new verification link has been sent.
+          If an account exists for that email, a new verification link has
+          been sent.
         </AlertDescription>
       </Alert>
     );
@@ -174,13 +226,21 @@ function ResendForm({
   return (
     <div className="space-y-2">
       {status === "error" && (
-        <Alert variant="destructive" className="py-2 border-red-500/50 bg-red-950/30">
+        <Alert
+          variant="destructive"
+          className="py-2 border-red-500/50 bg-red-950/30"
+        >
           <AlertCircle className="h-3.5 w-3.5" />
-          <AlertDescription className="text-xs">Unable to reach the server. Please try again.</AlertDescription>
+
+          <AlertDescription className="text-xs">
+            Unable to reach the server. Please try again.
+          </AlertDescription>
         </Alert>
       )}
+
       <div className="space-y-1.5">
         <Label className="text-gray-200 text-sm">Email address</Label>
+
         <Input
           type="email"
           placeholder="you@example.com"
@@ -189,14 +249,20 @@ function ResendForm({
           className="h-10 bg-gray-900/40 border-gray-600/60 focus:border-purple-500/60 focus:ring-purple-500/20 focus:ring-2 transition-all"
         />
       </div>
+
       <Button
         className="w-full h-10 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800"
         onClick={onResend}
         disabled={!email || status === "sending"}
       >
         {status === "sending" ? (
-          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending…</>
-        ) : "Resend Verification Email"}
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Sending…
+          </>
+        ) : (
+          "Resend Verification Email"
+        )}
       </Button>
     </div>
   );
