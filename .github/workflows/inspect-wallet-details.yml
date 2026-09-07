@@ -1,0 +1,21 @@
+name: Inspect wallet details
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print transaction detail renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/app/pages/Wallet.tsx').read_text()
+          marker='MORE DETAILS'
+          i=s.find(marker)
+          print('MARKER', i)
+          print(s[max(0,i-5000):i+10000])
+          PY
