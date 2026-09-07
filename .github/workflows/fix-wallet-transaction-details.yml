@@ -11,18 +11,20 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply transaction history patch
         run: |
-          sed -i 's/s,n=re.subn(pattern,label,s,count=1,flags=re.S)/s,n=re.subn(pattern,lambda _m: label,s,count=1,flags=re.S)/' scripts/patch-transaction-history.py
-          sed -i 's#end=s.index.*#m=re.search(r"\\n\\s*\\n\\s*\\)}", s[start:]); end=start + m.start() + m.group().rfind("\\)}") + 2#' scripts/patch-transaction-history.py
           python3 scripts/patch-transaction-history.py
+          sed -i 's/affiliate_earned: "referral_bonus"/affiliate_earned: "affiliate_commission"/' src/app/contexts/TransactionContext.tsx
+          sed -i 's/affiliate_commission: "referral_bonus"/affiliate_commission: "affiliate_commission"/' src/app/contexts/TransactionContext.tsx
+          sed -i 's/vip_purchase: "withdrawal"/vip_purchase: "vip_purchase"/' src/app/contexts/TransactionContext.tsx
+          sed -i 's/streak_reward: "deposit"/streak_reward: "streak_reward"/' src/app/contexts/TransactionContext.tsx
       - name: Verify build
         run: |
-          npm ci
+          npm install
           npm run build
       - name: Commit and clean temporary files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/contexts/TransactionContext.tsx src/app/pages/Wallet.tsx
-          git rm scripts/patch-transaction-history.py .github/workflows/fix-wallet-transaction-details.yml .github/workflows/apply-transaction-history-frontend.yml src/app/.transaction-history-trigger src/app/.transaction-history-trigger-2 src/app/.transaction-history-trigger-3 src/app/.transaction-history-trigger-4 || true
+          git rm scripts/patch-transaction-history.py .github/workflows/fix-wallet-transaction-details.yml .github/workflows/apply-transaction-history-frontend.yml src/app/.transaction-history-trigger src/app/.transaction-history-trigger-2 src/app/.transaction-history-trigger-3 src/app/.transaction-history-trigger-4 src/app/.transaction-history-trigger-5 || true
           git commit -m "Upgrade transaction history details"
           git push
