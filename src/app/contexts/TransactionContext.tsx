@@ -7,10 +7,14 @@ function _mapBackendType(type: string): TransactionType {
   const m: Record<string, TransactionType> = {
     deposit: "deposit", withdrawal: "withdrawal", transfer: "transfer",
     game_win: "game_win", game_loss: "game_loss", game_bet: "game_bet", game_void: "game_void",
-    task_reward: "task_reward", referral_bonus: "referral_bonus",
-    referral_earned: "referral_bonus", affiliate_earned: "affiliate_commission",
-    affiliate_commission: "affiliate_commission", commission: "referral_bonus",
-    vip_purchase: "vip_purchase", streak_reward: "streak_reward",
+    task_reward: "task_reward", referral_bonus: "referral_bonus", referral_earned: "referral_bonus",
+    affiliate_earned: "affiliate_commission", affiliate_commission: "affiliate_commission",
+    ambassador_commission: "ambassador_commission", ambassador_earned: "ambassador_commission",
+    challenge_reward: "challenge_reward", auction_bid: "auction_bid", auction_reward: "auction_reward",
+    featured_payment: "featured_payment", featured_refund: "featured_refund",
+    football_points_conversion: "football_points_conversion", vip_purchase: "vip_purchase",
+    vip_grant: "vip_grant", streak_reward: "streak_reward",
+    admin_credit: "admin_credit", admin_debit: "admin_debit", wallet_freeze: "wallet_freeze", wallet_unfreeze: "wallet_unfreeze",
   };
   return m[type] ?? (type as TransactionType);
 }
@@ -31,9 +35,6 @@ function _normalizeGameMetadata(amount: number, raw: any) {
   const metadata = _parseMetadata(raw);
   let gameType = String(metadata.gameType || metadata.game || metadata.game_type || "").toLowerCase().replace(/[-\s]/g, "_");
   const description = String(metadata.__transactionDescription || "").toLowerCase();
-
-  // Older ledger rows may have a human description but incomplete metadata. Recover only
-  // the game identity that is explicitly present in that recorded description.
   if (!gameType) {
     if (description.includes("colour prediction") || description.includes("color prediction") || description.includes("colour game") || description.includes("color game")) gameType = "color_game";
     else if (description.includes("dice clash")) gameType = "dice_clash";
@@ -42,18 +43,10 @@ function _normalizeGameMetadata(amount: number, raw: any) {
     else if (description.includes("coin flip")) gameType = "pvp_coinflip";
     else if (description.includes("spin battle")) gameType = "spin_battle";
     if (gameType) metadata.gameType = gameType;
-  } else {
-    metadata.gameType = gameType;
-  }
-
-  // Colour Prediction is a lobby-based game. Preserve a recorded lobby; only use the
-  // established lobby bands when an older Colour Prediction record has no lobby field.
+  } else metadata.gameType = gameType;
   if (gameType === "color_game" || gameType === "color_prediction") {
-    if (metadata.lobby == null && metadata.lobbyId == null && metadata.lobbyName == null) {
-      metadata.lobby = amount <= 20 ? "A" : amount <= 50 ? "B" : amount <= 120 ? "C" : "D";
-    }
+    if (metadata.lobby == null && metadata.lobbyId == null && metadata.lobbyName == null) metadata.lobby = amount <= 20 ? "A" : amount <= 50 ? "B" : amount <= 120 ? "C" : "D";
   }
-
   delete metadata.__transactionDescription;
   return metadata;
 }
@@ -62,18 +55,14 @@ function _formatGameDescription(type: string, amount: number, metadata: any, fal
   const gameType = String(metadata?.gameType || metadata?.game || metadata?.game_type || "").toLowerCase().replace(/[-\s]/g, "_");
   const names: Record<string, string> = {
     color_game: "Colour Prediction", color_prediction: "Colour Prediction", colour_prediction: "Colour Prediction", spin_battle: "Spin Battle",
-    dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena",
-    coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip", pvp_coin_flip: "Coin Flip", reaction_tap: "Reaction Tap",
+    dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena", coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip", pvp_coin_flip: "Coin Flip", reaction_tap: "Reaction Tap",
   };
   if (!gameType) return fallback;
   const game = names[gameType] || gameType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const action = type === "game_loss" ? "Loss" : type === "game_win" ? "Win" : type === "game_bet" ? "Bet" : "Void";
   const lobby = metadata?.lobby ?? metadata?.lobbyName ?? metadata?.lobby_name ?? metadata?.lobbyId;
   const stake = metadata?.stake ?? metadata?.stakeAmount ?? metadata?.roomStake ?? metadata?.stakeRoom ?? metadata?.stake_room;
-  // Lobby-based games use Lobby X. Stake-selection games use Stake Room $X.
-  const context = lobby != null && String(lobby).trim() !== ""
-    ? `Lobby ${String(lobby).replace(/^Lobby\s*/i, "")}`
-    : stake != null && String(stake).trim() !== "" ? `Stake Room $${Number(stake).toLocaleString()}` : null;
+  const context = lobby != null && String(lobby).trim() !== "" ? `Lobby ${String(lobby).replace(/^Lobby\s*/i, "")}` : stake != null && String(stake).trim() !== "" ? `Stake Room $${Number(stake).toLocaleString()}` : null;
   return `${game} ${action}${context ? ` - ${context}` : ""}`;
 }
 function _backendToLocal(tx: any): Transaction {
@@ -81,37 +70,21 @@ function _backendToLocal(tx: any): Transaction {
   const rawMetadata = _parseMetadata(tx.metadata);
   const metadata = _normalizeGameMetadata(Math.abs(amount), { ...rawMetadata, __transactionDescription: tx.description ?? "" });
   const fallbackDescription = tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction";
-  return {
-    id: tx.id,
-    type: _mapBackendType(tx.type),
-    amount: Math.abs(amount),
-    status: _mapBackendStatus(tx.status),
-    createdAt: tx.createdAt,
-    description: _formatGameDescription(tx.type, Math.abs(amount), metadata, fallbackDescription),
-    metadata,
-  };
+  return { id: tx.id, type: _mapBackendType(tx.type), amount: Math.abs(amount), status: _mapBackendStatus(tx.status), createdAt: tx.createdAt, description: _formatGameDescription(tx.type, Math.abs(amount), metadata, fallbackDescription), metadata };
 }
 
 export type TransactionType = string;
 export type TransactionStatus = "completed" | "pending" | "confirming" | "failed" | "expired";
 export type Transaction = {
-  id: string;
-  type: TransactionType;
-  amount: number;
-  status: TransactionStatus;
-  createdAt: string;
-  description: string;
+  id: string; type: TransactionType; amount: number; status: TransactionStatus; createdAt: string; description: string;
   metadata?: { fromWallet?: string; toWallet?: string; gameType?: string; lobby?: string; depositId?: string; withdrawalId?: string; uniqueAmount?: number; method?: string; [key: string]: any; };
 };
 
 type TransactionContextType = {
-  transactions: Transaction[];
-  addTransaction: (transaction: Omit<Transaction, "id" | "createdAt">) => void;
+  transactions: Transaction[]; addTransaction: (transaction: Omit<Transaction, "id" | "createdAt">) => void;
   updateTransaction: (id: string, updates: Partial<Omit<Transaction, "id" | "createdAt">>) => void;
-  getTransactionByDepositId: (depositId: string) => Transaction | undefined;
-  getTransactionByWithdrawalId: (withdrawalId: string) => Transaction | undefined;
-  clearTransactions: () => void;
-  refreshTransactionsFromBackend: () => Promise<void>;
+  getTransactionByDepositId: (depositId: string) => Transaction | undefined; getTransactionByWithdrawalId: (withdrawalId: string) => Transaction | undefined;
+  clearTransactions: () => void; refreshTransactionsFromBackend: () => Promise<void>;
 };
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
 
@@ -132,19 +105,13 @@ export function TransactionProvider({ children }: { children: ReactNode }) {
       });
     } catch {}
   }, []);
-
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const stored = localStorage.getItem("bitzimiTransactions");
-        if (stored) return JSON.parse(stored);
-      }
-    } catch (e) { console.error("Error loading transactions:", e); }
+    try { if (typeof window !== 'undefined' && window.localStorage) { const stored = localStorage.getItem("bitzimiTransactions"); if (stored) return JSON.parse(stored); } }
+    catch (e) { console.error("Error loading transactions:", e); }
     return [];
   });
   useEffect(() => { try { localStorage.setItem("bitzimiTransactions", JSON.stringify(transactions)); } catch {} }, [transactions]);
   useEffect(() => { refreshTransactionsFromBackend(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   const addTransaction = (transaction: Omit<Transaction, "id" | "createdAt">) => {
     const newTransaction: Transaction = { ...transaction, id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, createdAt: new Date().toISOString() };
     setTransactions((prev) => { const updated = [newTransaction, ...prev].slice(0, 100); try { localStorage.setItem("bitzimiTransactions", JSON.stringify(updated)); } catch {} return updated; });
