@@ -10,14 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Replace generic transaction detail arrays
+      - name: Apply transaction-specific detail renderer
         shell: python
         run: |
           from pathlib import Path
           import re
           p=Path('src/app/pages/Wallet.tsx')
           s=p.read_text()
-          marker='  // Transaction History\n'
           helper=r'''  const getTransactionDetailRows = (tx: any, txDate: Date) => {
     const m = tx.metadata ?? {};
     const type = String(tx.type ?? "").toLowerCase();
@@ -39,7 +38,7 @@ jobs:
       if (m.network) rows.push({label:"Network", value:m.network});
       if (m.bankName) rows.push({label:"Bank", value:m.bankName});
       if (type === "withdrawal" && m.destination) rows.push({label:m.method === "bank" ? "Bank Account" : "Wallet Address", value:m.destination});
-      if (type === "deposit" && m.destinationLabel) rows.push({label:"To", value:m.destinationLabel});
+      if (type === "deposit" && (m.destinationLabel || m.toWallet)) rows.push({label:"To", value:m.destinationLabel ?? `${wallet(m.toWallet)} Wallet`});
       const ref = m.referenceCode;
       if (ref) rows.push({label:"Reference ID", value:<span className="flex items-center gap-2 justify-end"><span className="font-mono text-xs max-w-[220px] truncate">{String(ref).length > 24 ? `${String(ref).slice(0,24)}…` : String(ref)}</span><button type="button" className="shrink-0 text-primary hover:opacity-80" onClick={(e)=>{e.stopPropagation(); navigator.clipboard?.writeText(String(ref)); toast.success("Reference ID copied");}} aria-label="Copy reference ID"><Copy className="h-3.5 w-3.5"/></button></span>});
       if (type === "withdrawal" && m.fee != null) rows.push({label:"Fee", value:formatCurrency(Number(m.fee))});
@@ -53,11 +52,13 @@ jobs:
       if (m.roundNumber != null) rows.push({label:"Round", value:`#${m.roundNumber}`});
       if (m.color) rows.push({label:"Color", value:wallet(m.color)});
       if (m.selection) rows.push({label:"Selection", value:wallet(m.selection)});
+      if (m.team) rows.push({label:"Team", value:wallet(m.team)});
     } else if (type === "task_reward") {
       rows.push({label:"From", value:m.sourceLabel ?? (m.taskTitle ? `Task: ${m.taskTitle}` : "Completed Task")});
       rows.push({label:"To", value:m.destinationLabel ?? (m.toWallet ? `${wallet(m.toWallet)} Wallet` : "Task Wallet")});
       if (m.taskType) rows.push({label:"Task Type", value:wallet(m.taskType)});
       if (m.taskId) rows.push({label:"Task ID", value:m.taskId});
+      if (m.rewardAmount != null) rows.push({label:"Reward", value:formatCurrency(Number(m.rewardAmount))});
     } else if (type === "referral_bonus") {
       rows.push({label:"From", value:m.sourceLabel ?? "Referral Reward"});
       rows.push({label:"To", value:m.destinationLabel ?? "Referral Wallet"});
@@ -69,10 +70,11 @@ jobs:
       if (m.tier != null) rows.push({label:"Tier", value:`Tier ${m.tier}`});
       if (m.eventType) rows.push({label:"Event", value:wallet(m.eventType)});
       if (m.rate != null) rows.push({label:"Rate", value:`${Number(m.rate)*100}%`});
+      if (m.sourceUserId) rows.push({label:"Source User", value:m.sourceUserId});
     } else if (type === "streak_reward") {
       rows.push({label:"From", value:m.sourceLabel ?? "Daily Streak"});
+      if (m.rewardType) rows.push({label:"Reward Type", value:wallet(m.rewardType)});
       if (m.streakDay != null) rows.push({label:"Streak Day", value:`Day ${m.streakDay}`});
-      if (m.month) rows.push({label:"Month", value:m.month});
       rows.push({label:"To", value:m.destinationLabel ?? "Game Wallet"});
     } else if (type === "vip_purchase") {
       rows.push({label:"From", value:m.sourceLabel ?? "Game Wallet"});
@@ -82,12 +84,13 @@ jobs:
       rows.push({label:"To", value:m.destinationLabel ?? "VIP Membership"});
     } else if (type === "challenge_reward") {
       rows.push({label:"From", value:m.sourceLabel ?? "Monthly Challenge"});
+      if (m.challengePeriod) rows.push({label:"Period", value:m.challengePeriod});
       if (m.level) rows.push({label:"Level", value:wallet(m.level)});
       if (m.rank != null) rows.push({label:"Rank", value:`#${m.rank}`});
       if (m.pool != null) rows.push({label:"Prize Pool", value:formatCurrency(Number(m.pool))});
       rows.push({label:"To", value:m.destinationLabel ?? "Task Wallet"});
     } else if (type === "vip_grant") {
-      rows.push({label:"From", value:m.sourceLabel ?? "VIP Grant"});
+      rows.push({label:"From", value:m.sourceLabel ?? "Admin VIP Grant"});
       if (m.durationDays != null) rows.push({label:"Duration", value:`${m.durationDays} days`});
       if (m.reason) rows.push({label:"Reason", value:m.reason});
     } else if (m.sourceLabel || m.destinationLabel) {
@@ -99,12 +102,17 @@ jobs:
   };
 
 '''
-          if marker in s and 'const getTransactionDetailRows' not in s:
+          marker='  // Transaction History\n'
+          if 'const getTransactionDetailRows' in s:
+              s=re.sub(r'  const getTransactionDetailRows = \(tx: any, txDate: Date\) => \{.*?\n  \};\n\n', helper, s, count=1, flags=re.S)
+          elif marker in s:
               s=s.replace(marker,helper+marker,1)
+          else:
+              raise SystemExit('Transaction History marker not found')
           pat=re.compile(r'\[\s*\{ label: "Transaction ID".*?\n\s*\]',re.S)
           s,n=pat.subn('[...getTransactionDetailRows(tx, txDate)]',s)
-          print('ARRAYS_REPLACED',n)
-          if n != 2: raise SystemExit(f'Expected 2 arrays, got {n}')
+          print('DETAIL_ARRAYS_REPLACED',n)
+          if n != 2: raise SystemExit(f'Expected 2 transaction detail arrays, got {n}')
           p.write_text(s)
       - name: Verify and commit
         run: |
