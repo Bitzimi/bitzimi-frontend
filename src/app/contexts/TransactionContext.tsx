@@ -12,7 +12,7 @@ function _mapBackendType(type: string): TransactionType {
     affiliate_commission: "affiliate_commission", commission: "referral_bonus",
     vip_purchase: "vip_purchase", streak_reward: "streak_reward",
   };
-  return m[type] ?? "deposit";
+  return m[type] ?? (type as TransactionType);
 }
 function _mapBackendStatus(status: string): TransactionStatus {
   const m: Record<string, TransactionStatus> = {
@@ -92,9 +92,7 @@ function _backendToLocal(tx: any): Transaction {
   };
 }
 
-export type TransactionType =
-  | "deposit" | "withdrawal" | "transfer" | "game_bet" | "game_win" | "game_loss" | "game_void"
-  | "task_reward" | "referral_bonus";
+export type TransactionType = string;
 export type TransactionStatus = "completed" | "pending" | "confirming" | "failed" | "expired";
 export type Transaction = {
   id: string;
