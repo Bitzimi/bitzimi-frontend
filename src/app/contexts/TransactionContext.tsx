@@ -6,7 +6,7 @@ function _getToken() { return localStorage.getItem("bitzimi_access_token"); }
 function _mapBackendType(type: string): TransactionType {
   const m: Record<string, TransactionType> = {
     deposit: "deposit", withdrawal: "withdrawal", transfer: "transfer",
-    game_win: "game_win", game_loss: "game_loss", game_bet: "game_bet",
+    game_win: "game_win", game_loss: "game_loss", game_bet: "game_bet", game_void: "game_void",
     task_reward: "task_reward", referral_bonus: "referral_bonus",
     referral_earned: "referral_bonus", affiliate_earned: "referral_bonus",
     affiliate_commission: "referral_bonus", commission: "referral_bonus",
@@ -22,8 +22,19 @@ function _mapBackendStatus(status: string): TransactionStatus {
   };
   return m[status] ?? "pending";
 }
+function _normalizeGameMetadata(type: string, amount: number, raw: any) {
+  const metadata = raw && typeof raw === "object" ? { ...raw } : {};
+  const gameType = String(metadata.gameType || metadata.game || "").toLowerCase();
+  if (gameType === "color_game" && metadata.lobby == null && metadata.lobbyId == null) {
+    const lobby = amount <= 20 ? "A" : amount <= 100 ? "B" : amount <= 1000 ? "C" : "D";
+    metadata.lobby = lobby;
+  }
+  return metadata;
+}
 function _backendToLocal(tx: any): Transaction {
   const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));
+  const parsedMetadata = tx.metadata ? (typeof tx.metadata === "string" ? (() => { try { return JSON.parse(tx.metadata); } catch { return {}; } })() : tx.metadata) : {};
+  const metadata = _normalizeGameMetadata(tx.type, Math.abs(amount), parsedMetadata);
   return {
     id: tx.id,
     type: _mapBackendType(tx.type),
@@ -31,12 +42,12 @@ function _backendToLocal(tx: any): Transaction {
     status: _mapBackendStatus(tx.status),
     createdAt: tx.createdAt,
     description: tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction",
-    metadata: tx.metadata ? (typeof tx.metadata === "string" ? JSON.parse(tx.metadata) : tx.metadata) : undefined,
+    metadata,
   };
 }
 
 export type TransactionType =
-  | "deposit" | "withdrawal" | "transfer" | "game_bet" | "game_win" | "game_loss"
+  | "deposit" | "withdrawal" | "transfer" | "game_bet" | "game_win" | "game_loss" | "game_void"
   | "task_reward" | "referral_bonus";
 export type TransactionStatus = "completed" | "pending" | "confirming" | "failed" | "expired";
 export type Transaction = {
