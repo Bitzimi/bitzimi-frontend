@@ -320,23 +320,16 @@ export default function ColorGame() {
         </Button>
       </div>
 
-      <div className="mb-5">
-        <div className="grid grid-cols-[1fr_auto] items-start gap-x-3 gap-y-1">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0">
-                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                <span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
-            </div>
+      {/* Compact two-row header: title + Rules, then LIVE + round + WAITING */}
+      <div className="mb-4">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+          <div className="min-w-0"><h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2></div>
+          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-3 shrink-0"><Info className="mr-1.5 h-4 w-4" />Rules</Button>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0"><div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /><span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span></div>
+            <p className="text-sm md:text-base text-gray-600 truncate">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-2.5 shrink-0"><Info className="mr-1.5 h-3.5 w-3.5" />Rules</Button>
-          <div />
-          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2 text-xs justify-self-end">{gameState.state}</Badge>
+          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2.5 text-xs justify-self-end">{gameState.state}</Badge>
         </div>
       </div>
 
