@@ -20,4 +20,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/pages/Wallet.tsx
           git diff --cached --quiet || git commit -m "Apply final transaction-specific wallet details [transaction-ui-final]"
-          git push
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
