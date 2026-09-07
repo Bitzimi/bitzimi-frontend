@@ -535,6 +535,7 @@ export function Wallet() {
       withdrawal:           "Withdrawal",
       transfer:             "Transfer",
       game_win:             "Game Win",
+      game_loss:            "Game Loss",
       game_bet:             "Game Bet",
       task_reward:          "Task Reward",
       referral_bonus:       "Referral Bonus",
@@ -543,6 +544,30 @@ export function Wallet() {
       streak_reward:        "Daily Streak Reward",
     };
     return labels[type] || type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const getGameTransactionView = (tx: any) => {
+    if (!tx?.type || !["game_win", "game_loss", "game_bet", "game_void"].includes(tx.type)) return null;
+    const meta = tx.metadata || {};
+    const gameType = String(meta.gameType || meta.game || "").toLowerCase();
+    const gameNames: Record<string, string> = {
+      color_game: "Colour Prediction", color_prediction: "Colour Prediction",
+      spin_battle: "Spin Battle", dice_clash: "Dice Clash", dice_royale: "Dice Royale",
+      dice_arena: "Dice Arena", coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip",
+      reaction_tap: "Reaction Tap",
+    };
+    const game = gameNames[gameType] || (gameType ? gameType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) : "Game");
+    const action = tx.type === "game_loss" ? "Loss" : tx.type === "game_win" ? "Win" : tx.type === "game_bet" ? "Bet" : "Void";
+    const lobby = meta.lobby ? `Lobby ${String(meta.lobby).replace(/^Lobby\s*/i, "")}` : null;
+    const stake = meta.stake ?? meta.stakeAmount ?? meta.roomStake ?? meta.stakeRoom;
+    const stakeRoom = stake != null ? `Stake Room ${formatCurrency(Number(stake))}` : null;
+    const context = lobby || stakeRoom;
+    return {
+      game, action, context,
+      title: `${game} ${action}${context ? ` - ${context}` : ""}`,
+      contextLabel: lobby ? "Lobby" : stakeRoom ? "Stake Room" : null,
+      contextValue: lobby || (stakeRoom ? formatCurrency(Number(stake)) : null),
+    };
   };
 
   return (
@@ -889,6 +914,7 @@ export function Wallet() {
                 const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "game_loss" || tx.type === "vip_purchase";
                 const isExpanded = expandedTransaction === tx.id;
                 const txDate = new Date(tx.createdAt);
+                const gameView = getGameTransactionView(tx);
                 return (
                   <div key={tx.id}>
                     {/* Main Row */}
@@ -934,15 +960,14 @@ export function Wallet() {
                       <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
                         <div className="space-y-2">
                           {[
-                            { label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },
+                            { label: "Transaction ID", value: <span className="font-mono text-xs break-all">{tx.id}</span> },
                             { label: "Type", value: getTransactionTypeLabel(tx.type) },
                             { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
                             { label: "Status", value: getStatusBadge(tx.status) },
                             tx.metadata?.fromWallet ? { label: "From", value: `${tx.metadata.fromWallet} Wallet` } : null,
                             tx.metadata?.toWallet ? { label: "To", value: `${tx.metadata.toWallet} Wallet` } : null,
-                            tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,
-                            tx.metadata?.lobby ? { label: "Lobby", value: `Lobby ${tx.metadata.lobby}` } : null,
-                            tx.metadata?.stake ? { label: "Room", value: formatCurrency(tx.metadata.stake) } : null,
+                            gameView ? { label: "Game", value: gameView.game } : null,
+                            gameView?.contextLabel ? { label: gameView.contextLabel, value: gameView.contextValue } : null,
                             tx.metadata?.subscriptionType ? { label: "Subscription", value: tx.metadata.subscriptionType } : null,
                             tx.metadata?.subscriptionPlan ? { label: "Plan", value: tx.metadata.subscriptionPlan } : null,
                             tx.metadata?.rewardType ? { label: "Reward Type", value: tx.metadata.rewardType.replace(/_/g, " ") } : null,
@@ -1661,7 +1686,7 @@ export function Wallet() {
                               : <ArrowDownToLine className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate text-sm">{tx.description}</p>
+                            <p className="font-medium truncate text-sm">{gameView?.title ?? tx.description}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {txDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                               {" · "}
@@ -1681,7 +1706,7 @@ export function Wallet() {
                           <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
                             <div className="space-y-2">
                               {[
-                                { label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },
+                                { label: "Transaction ID", value: <span className="font-mono text-xs break-all">{tx.id}</span> },
                                 { label: "Type", value: getTransactionTypeLabel(tx.type) },
                                 { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
                                 { label: "Status", value: getStatusBadge(tx.status) },
