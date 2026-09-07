@@ -26,8 +26,9 @@ for i in reversed(pos):
     if end is None: raise SystemExit('unterminated helper')
     if s[end:end+28].startswith('\n  // [transaction-ui-final]'): end += len('\n  // [transaction-ui-final]')
     s=s[:i]+s[end:]
-ret=s.rfind('  return (')
-if ret<0: raise SystemExit('component return not found')
-s=s[:ret]+helper+s[ret:]
+anchor='  const getGameTransactionView = (tx: any) => {'
+pos=s.find(anchor)
+if pos<0: raise SystemExit('game transaction helper anchor not found')
+s=s[:pos]+helper+s[pos:]
 p.write_text(s)
 print(f'repaired {len(pos)} helper declaration(s)')
