@@ -1,30 +1,10 @@
-name: Finalize transaction history
+name: Superseded transaction finalizer
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  finalize:
-    if: "!contains(github.event.head_commit.message, '[transaction-history-final]')"
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Normalize backend transaction types
-        shell: python
-        run: |
-          from pathlib import Path
-          p=Path('src/app/contexts/TransactionContext.tsx')
-          s=p.read_text()
-          s=s.replace('  return m[type] ?? "deposit";', '  return m[type] ?? (type as TransactionType);')
-          s=s.replace('export type TransactionType =\n  | "deposit" | "withdrawal" | "transfer" | "game_bet" | "game_win" | "game_loss" | "game_void"\n  | "task_reward" | "referral_bonus";', 'export type TransactionType = string;')
-          p.write_text(s)
-      - name: Verify and commit
-        run: |
-          npm install
-          npm run build
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app/contexts/TransactionContext.tsx
-          git diff --cached --quiet || git commit -m "Finalize transaction history type normalization [transaction-history-final]"
-          git push
+      - run: echo "Superseded."
