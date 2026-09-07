@@ -273,7 +273,7 @@ export function Wallet() {
     );
 
     // Cleanup on unmount
-    const getTransactionDetailRows = (tx: any, txDate: Date) => {
+  const getTransactionDetailRows = (tx: any, txDate: Date) => {
     const m = tx.metadata ?? {};
     const type = String(tx.type ?? "").toLowerCase();
     const wallet = (v: any) => String(v ?? "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
