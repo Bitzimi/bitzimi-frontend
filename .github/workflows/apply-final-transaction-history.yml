@@ -1,10 +1,25 @@
-name: Superseded final transaction workflow
+name: Apply final transaction history details
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  disabled:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[transaction-ui-final]')"
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Superseded."
+      - uses: actions/checkout@v4
+      - name: Repair active Wallet transaction detail renderer
+        run: python3 scripts/patch_wallet_transaction_details_v4.py
+      - name: Verify and commit
+        run: |
+          npm install
+          npm run build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/Wallet.tsx
+          git diff --cached --quiet || git commit -m "Apply final transaction-specific wallet details [transaction-ui-final]"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
