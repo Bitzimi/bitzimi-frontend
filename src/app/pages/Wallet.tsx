@@ -1672,6 +1672,7 @@ export function Wallet() {
                     const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "game_loss" || tx.type === "vip_purchase";
                     const isExpanded = expandedTransaction === `all-${tx.id}`;
                     const txDate = new Date(tx.createdAt);
+                    const gameView = getGameTransactionView(tx);
                     return (
                       <div key={tx.id}>
                         <div
@@ -1710,6 +1711,8 @@ export function Wallet() {
                                 { label: "Type", value: getTransactionTypeLabel(tx.type) },
                                 { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
                                 { label: "Status", value: getStatusBadge(tx.status) },
+                                gameView ? { label: "Game", value: gameView.game } : null,
+                                gameView?.contextLabel ? { label: gameView.contextLabel, value: gameView.contextValue } : null,
                                 tx.metadata?.method ? { label: "Method", value: tx.metadata.method } : null,
                                 tx.metadata?.network ? { label: "Network", value: tx.metadata.network } : null,
                                 tx.metadata?.bankName ? { label: "Bank", value: tx.metadata.bankName } : null,
