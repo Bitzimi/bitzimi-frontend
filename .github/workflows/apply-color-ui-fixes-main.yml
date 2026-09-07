@@ -1,0 +1,56 @@
+name: Apply Color UI Fixes Main
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Color Prediction UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/app/components/ResponsiveLayout.tsx'); s=p.read_text()
+          s=s.replace('interface ResponsiveLayoutProps {\n  children: ReactNode;\n}', 'interface ResponsiveLayoutProps {\n  children: ReactNode;\n  showFloatingOnlineCounter?: boolean;\n}')
+          s=s.replace('export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {', 'export function ResponsiveLayout({ children, showFloatingOnlineCounter = true }: ResponsiveLayoutProps) {')
+          s=s.replace('      <FloatingOnlineCounter />', '      {showFloatingOnlineCounter && <FloatingOnlineCounter />}')
+          p.write_text(s)
+
+          p=Path('src/app/pages/ColorGame.tsx'); s=p.read_text()
+          s=s.replace('<ResponsiveLayout>', '<ResponsiveLayout showFloatingOnlineCounter={false}>')
+          header=re.compile(r'      <div className="mb-6">\n        <div className="flex items-center justify-between">.*?        </div>\n      </div>\n\n      <Card className="mb-4 bg-gradient-to-r from-purple-500', re.S)
+          replacement='''      <div className="mb-6">\n        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">\n          <div className="flex items-center gap-2 min-w-0">\n            <h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2>\n            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0">\n              <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />\n              <span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span>\n            </div>\n          </div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-3 shrink-0"><Info className="mr-1.5 h-4 w-4" />Rules</Button>\n          <div className="flex items-center gap-2 min-w-0"><p className="text-sm md:text-base text-gray-600 truncate">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p></div>\n          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2.5 text-xs justify-self-end">{gameState.state}</Badge>\n        </div>\n      </div>\n\n      <Card className="mb-4 bg-gradient-to-r from-purple-500'''
+          s,n=header.subn(replacement,s,1); assert n==1, 'header not found'
+          old='''{currentRoundBet && <Alert className="border-blue-200 bg-blue-50"><AlertCircle className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-800">Bet locked for this round. Wait for results!</AlertDescription></Alert>}'''
+          new='''{currentRoundBet && <Alert className="border-blue-200 bg-blue-50 py-2"><AlertCircle className="h-4 w-4 text-blue-600 shrink-0" /><AlertDescription className="text-blue-800 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis">Bet locked for this round. Wait for results!</AlertDescription></Alert>}'''
+          assert old in s, 'bet alert not found'; s=s.replace(old,new)
+          old='''{gameState.history.length > 0 ? <div className="flex gap-2 flex-wrap">{gameState.history.map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}'''
+          new='''{gameState.history.length > 0 ? <div className="grid grid-cols-5 md:grid-cols-10 gap-3 w-full">{gameState.history.slice(0, 10).map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className="flex justify-center"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div></div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}'''
+          assert old in s, 'history not found'; s=s.replace(old,new); p.write_text(s)
+
+          p=Path('src/app/components/WheelSpinner.tsx'); s=p.read_text()
+          old='''  // Calculate rotation based on winner from server\n  // Wheel layout: Left half (0-180°) = BLUE, Right half (180-360°) = RED\n  const getTargetRotation = () => {\n    if (!winner) return 0;\n    \n    const baseRotation = 1800; // 5 full spins\n    \n    // Generate random angle within the correct segment\n    let winnerOffset;\n    if (winner === "red") {\n      // RED segment: 180° to 360° (right half)\n      // Random angle between 180 and 360\n      winnerOffset = 180 + Math.random() * 180;\n    } else {\n      // BLUE segment: 0° to 180° (left half)  \n      // Random angle between 0 and 180\n      winnerOffset = Math.random() * 180;\n    }\n    \n    return baseRotation + winnerOffset;\n  };'''
+          new='''  // Server chooses the result; every client uses the same exact visual endpoint.\n  // Pointer is at the top. BLUE is the left half, RED the right half.\n  const getTargetRotation = () => {\n    if (!winner) return 0;\n    const baseRotation = 1800;\n    const winnerOffset = winner === "red" ? 270 : 90;\n    return baseRotation + winnerOffset;\n  };'''
+          assert old in s, 'wheel block not found'; s=s.replace(old,new); p.write_text(s)
+
+          p=Path('src/app/pages/Wallet.tsx'); s=p.read_text()
+          marker='''    return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());\n  };'''
+          helper='''    return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());\n  };\n\n  const getGameTransactionDisplay = (tx: any) => {\n    let metadata: Record<string, any> = {};\n    if (tx.metadata && typeof tx.metadata === "object") metadata = tx.metadata;\n    else if (tx.metadata) { try { metadata = JSON.parse(tx.metadata); } catch {} }\n    const names: Record<string, string> = { color_game: "Colour Prediction", spin_battle: "Spin Battle", dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena", coin_flip: "Coin Flip", reaction_tap: "Reaction Tap" };\n    const gameName = metadata.gameType ? (names[metadata.gameType] || String(metadata.gameType).replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase())) : null;\n    const lobby = metadata.lobbyId ?? metadata.lobby ?? metadata.roomLobby;\n    const stake = metadata.stakeRoom ?? metadata.stake ?? metadata.stakeAmount ?? metadata.room;\n    const context = lobby !== undefined && lobby !== null && String(lobby) !== "" ? { label: "Lobby", value: `Lobby ${String(lobby).replace(/^lobby\\s*/i, "").toUpperCase()}` } : stake !== undefined && stake !== null && stake !== "" ? { label: "Stake Room", value: formatCurrency(Number(stake)) } : null;\n    const outcomes: Record<string, string> = { game_win: "Win", game_loss: "Loss", game_void: "Void", game_bet: "Bet" };\n    const title = gameName && outcomes[tx.type] ? `${gameName} ${outcomes[tx.type]}${context ? ` - ${context.value}` : ""}` : (tx.description || getTransactionTypeLabel(tx.type));\n    return { title, metadata, gameName, context };\n  };'''
+          assert marker in s, 'wallet marker not found'; s=s.replace(marker,helper,1)
+          s=s.replace('{tx.description}', '{getGameTransactionDisplay(tx).title}')
+          s=s.replace('{ label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },','{ label: "Transaction ID", value: <span className="font-mono text-xs">{tx.id}</span> },')
+          s=s.replace('''                            tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,''','''                            (() => { const d = getGameTransactionDisplay(tx); return d.gameName ? { label: "Game", value: d.gameName } : null; })(),\n                            (() => { const d = getGameTransactionDisplay(tx); return d.context ? { label: d.context.label, value: d.context.value } : null; })(),''')
+          s=s.replace('''      game_win:             "Game Win",\n      game_bet:''','''      game_win:             "Game Win",\n      game_loss:            "Game Loss",\n      game_void:            "Game Void",\n      game_bet:''')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/components/ResponsiveLayout.tsx src/app/pages/ColorGame.tsx src/app/components/WheelSpinner.tsx src/app/pages/Wallet.tsx
+          git commit -m 'Fix Color Prediction UI, deterministic wheel and wallet transaction display'
+          git push
