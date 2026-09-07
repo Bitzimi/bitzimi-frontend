@@ -940,7 +940,7 @@ export function Wallet() {
                             { label: "Status", value: getStatusBadge(tx.status) },
                             tx.metadata?.fromWallet ? { label: "From", value: `${tx.metadata.fromWallet} Wallet` } : null,
                             tx.metadata?.toWallet ? { label: "To", value: `${tx.metadata.toWallet} Wallet` } : null,
-                            tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,
+                            tx.metadata?.gameType ? { label: "Game", value: ({ color_game: "Colour Prediction", color_prediction: "Colour Prediction", spin_battle: "Spin Battle", dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena", reaction_tap: "Reaction Tap", coin_flip: "Coin Flip" } as Record<string,string>)[tx.metadata.gameType] ?? tx.metadata.gameType.replace(/_/g, " ") } : null,
                             tx.metadata?.lobby ? { label: "Lobby", value: `Lobby ${tx.metadata.lobby}` } : null,
                             !tx.metadata?.lobby && tx.metadata?.stake ? { label: "Stake Room", value: formatCurrency(tx.metadata.stake) } : null,
                             tx.metadata?.subscriptionType ? { label: "Subscription", value: tx.metadata.subscriptionType } : null,

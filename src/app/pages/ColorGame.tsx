@@ -432,7 +432,7 @@ export default function ColorGame() {
             <Button onClick={() => handleBet("blue")} disabled={isBettingClosed || !betAmount || !isBetValid() || placingBet} className="h-12 bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed">{currentRoundBet ? "Bet Placed" : placingBet ? "Placing..." : "Bet on Blue"}</Button>
           </div>
 
-          {currentRoundBet && <Alert className="border-blue-200 bg-blue-50"><AlertCircle className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-800">Bet locked for this round. Wait for results!</AlertDescription></Alert>}
+          {currentRoundBet && <Alert className="border-blue-200 bg-blue-50 py-2"><AlertCircle className="h-4 w-4 text-blue-600 shrink-0" /><AlertDescription className="text-blue-800 text-xs sm:text-sm whitespace-nowrap overflow-hidden text-ellipsis">Bet locked for this round. Wait for results!</AlertDescription></Alert>}
           {gameState.state !== "WAITING" && !currentRoundBet && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{gameState.state === "SPINNING" ? "Determining winner..." : "Showing results..."}</AlertDescription></Alert>}
         </CardContent>
       </Card>
