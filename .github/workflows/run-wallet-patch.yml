@@ -1,20 +1,10 @@
-name: Run wallet transaction patch
+name: Superseded wallet patch
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  patch:
-    if: "!contains(github.event.head_commit.message, '[transaction-ui-fixed]')"
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 scripts/patch_wallet_transaction_details.py
-      - run: npm install && npm run build
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app/pages/Wallet.tsx
-          git diff --cached --quiet || git commit -m "Fix transaction-specific wallet detail UI [transaction-ui-fixed]"
-          git push
+      - run: echo "Superseded."
