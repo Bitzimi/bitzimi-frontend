@@ -3,42 +3,59 @@ import { ResponsiveLayout } from "../components/ResponsiveLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
-import { Users, DollarSign, Lock, ArrowLeft } from "lucide-react";
+import { Users, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { useSettings } from "../contexts/SettingsContext";
 import { COLOR_PREDICTION_LOBBIES } from "../config/lobbies";
-import { getLobbyStats, initializeHiddenRooms } from "../utils/roomManager";
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL as string | undefined;
+
+function getToken(): string | null {
+  return localStorage.getItem("bitzimi_access_token");
+}
 
 export default function LobbySelection() {
   const navigate = useNavigate();
   const { formatCurrency } = useSettings();
   const [playerCounts, setPlayerCounts] = useState<Record<string, number>>({});
 
-  // Initialize hidden rooms and get player counts
+  // The lobby-selection screen must use the backend's authoritative presence
+  // count. The legacy roomManager count only represented local/browser state.
   useEffect(() => {
-    // Initialize hidden rooms for all lobbies
-    COLOR_PREDICTION_LOBBIES.forEach(lobby => {
-      initializeHiddenRooms(lobby);
-    });
+    if (!API_BASE) return;
+    const token = getToken();
+    if (!token) return;
 
-    // Update player counts periodically
-    const updateCounts = () => {
-      const counts: Record<string, number> = {};
-      COLOR_PREDICTION_LOBBIES.forEach(lobby => {
-        const stats = getLobbyStats(lobby);
-        counts[lobby.id] = stats.totalPlayers;
-      });
-      setPlayerCounts(counts);
+    let cancelled = false;
+    const updateCounts = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/games/color/lobbies`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const data = payload?.data ?? {};
+        if (cancelled) return;
+
+        const counts: Record<string, number> = {};
+        COLOR_PREDICTION_LOBBIES.forEach(lobby => {
+          counts[lobby.id] = Number(data?.[lobby.id]?.lobbyPlayers ?? 0);
+        });
+        setPlayerCounts(counts);
+      } catch {
+        // Keep the last known server count if a poll temporarily fails.
+      }
     };
 
     updateCounts();
-    const interval = setInterval(updateCounts, 3000); // Update every 3 seconds
-
-    return () => clearInterval(interval);
+    const interval = setInterval(updateCounts, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleJoinLobby = (lobbyId: string) => {
-    // Navigate to lobby using URL parameter
     navigate(`/game/color/${lobbyId}`);
   };
 
