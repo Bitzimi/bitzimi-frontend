@@ -1045,7 +1045,7 @@ export function Wallet() {
                       <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
                         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">More Details</p>
                         <div className="space-y-2">
-                          {getTransactionDetailRows(tx, txDate).map((row: any, i) => (
+                          {getTransactionDetailRows(tx, txDate).map((row: any, i: number) => (
                             <div key={i} className="flex justify-between items-start gap-4 text-xs">
                               <span className="text-muted-foreground shrink-0">{row.label}</span>
                               <span className="font-medium text-right">{row.value}</span>
@@ -1759,37 +1759,18 @@ export function Wallet() {
                           </div>
                         </div>
                         {isExpanded && (
-                          <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
-                            <div className="space-y-2">
-                              {[
-                                { label: "Transaction ID", value: <span className="font-mono text-xs">{typeof tx.id === "string" ? tx.id.slice(0, 23) : tx.id}</span> },
-                                { label: "Type", value: getTransactionTypeLabel(tx.type) },
-                                { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
-                                { label: "Status", value: getStatusBadge(tx.status) },
-                                gameView ? { label: "Game", value: gameView.game } : null,
-                                gameView?.contextLabel ? { label: gameView.contextLabel, value: gameView.contextValue } : null,
-                                tx.metadata?.method ? { label: "Method", value: tx.metadata.method } : null,
-                                tx.metadata?.network ? { label: "Network", value: tx.metadata.network } : null,
-                                tx.metadata?.bankName ? { label: "Bank", value: tx.metadata.bankName } : null,
-                                tx.metadata?.txHash ? {
-                                  label: "Tx Hash",
-                                  value: (
-                                    <a href={`https://bscscan.com/tx/${tx.metadata.txHash}`} target="_blank" rel="noopener noreferrer"
-                                      className="font-mono text-primary hover:underline text-xs">
-                                      {`${tx.metadata.txHash.slice(0, 10)}…${tx.metadata.txHash.slice(-8)}`}
-                                    </a>
-                                  )
-                                } : null,
-                                { label: "Date & Time", value: txDate.toLocaleString() },
-                              ].filter(Boolean).map((row: any, i) => (
-                                <div key={i} className="flex justify-between items-start gap-4 text-xs">
-                                  <span className="text-muted-foreground shrink-0">{row.label}</span>
-                                  <span className="font-medium text-right capitalize">{row.value}</span>
-                                </div>
-                              ))}
+                      <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">More Details</p>
+                        <div className="space-y-2">
+                          {getTransactionDetailRows(tx, txDate).map((row: any, i: number) => (
+                            <div key={i} className="flex justify-between items-start gap-4 text-xs">
+                              <span className="text-muted-foreground shrink-0">{row.label}</span>
+                              <span className="font-medium text-right">{row.value}</span>
                             </div>
-                          </div>
-                        )}
+                          ))}
+                        </div>
+                      </div>
+                    )}
                       </div>
                     );
                   })}
