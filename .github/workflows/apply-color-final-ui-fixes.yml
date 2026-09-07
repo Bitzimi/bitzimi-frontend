@@ -14,15 +14,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # Hide the global floating online badge only on the Color Prediction game.
           p = Path('src/app/components/FloatingOnlineCounter.tsx')
           s = p.read_text()
           s = s.replace('import { useState, useEffect } from "react";', 'import { useState, useEffect } from "react";\nimport { useLocation } from "react-router";')
           s = s.replace('export function FloatingOnlineCounter() {\n  const [onlineCount', 'export function FloatingOnlineCounter() {\n  const location = useLocation();\n  if (location.pathname.startsWith("/game/color/")) return null;\n\n  const [onlineCount')
           p.write_text(s)
 
-          # Make the wheel endpoint deterministic. Math.random() was causing
-          # different devices to stop at different angles even with the same winner.
           p = Path('src/app/components/WheelSpinner.tsx')
           s = p.read_text()
           start = s.index('  // Calculate rotation based on winner from server')
@@ -31,25 +28,15 @@ jobs:
           s = s[:start] + replacement + s[end:]
           p.write_text(s)
 
-          # Compact selected-bet confirmation, rearrange header, and make the
-          # Previous Results area a fixed 10-item grid with no apparent 11th slot.
           p = Path('src/app/pages/ColorGame.tsx')
           s = p.read_text()
-
           old_header = '''      <div className="mb-6">\n        <div className="flex items-center justify-between">\n          <div>\n            <div className="flex items-center gap-2 mb-1">\n              <h2 className="text-lg md:text-2xl font-semibold">Red vs Blue Game</h2>\n              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 rounded-full animate-pulse">\n                <div className="w-2 h-2 bg-white rounded-full animate-ping" />\n                <span className="text-xs font-bold text-white uppercase tracking-wide">LIVE</span>\n              </div>\n            </div>\n            <div className="flex items-center gap-3">\n              <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>\n              <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase">{gameState.state}</Badge>\n              \n              \n              \n              \n            </div>\n          </div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)}><Info className="mr-2 h-4 w-4" />Rules</Button>\n        </div>\n      </div>'''
           new_header = '''      <div className="mb-5">\n        <div className="grid grid-cols-[1fr_auto] items-start gap-x-3 gap-y-1">\n          <div className="min-w-0">\n            <div className="flex items-center gap-2 min-w-0">\n              <h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2>\n              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0">\n                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />\n                <span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span>\n              </span>\n            </div>\n            <div className="flex items-center gap-2 mt-1">\n              <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>\n            </div>\n          </div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-2.5 shrink-0"><Info className="mr-1.5 h-3.5 w-3.5" />Rules</Button>\n          <div />\n          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2 text-xs justify-self-end">{gameState.state}</Badge>\n        </div>\n      </div>'''
-          if old_header in s:
-              s = s.replace(old_header, new_header)
-
+          if old_header in s: s = s.replace(old_header, new_header)
           s = s.replace('<Alert className="border-blue-200 bg-blue-50"><AlertCircle className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-800">Bet locked for this round. Wait for results!</AlertDescription></Alert>', '<Alert className="border-blue-200 bg-blue-50 py-1.5 px-2.5"><AlertCircle className="h-3.5 w-3.5 text-blue-600 shrink-0" /><AlertDescription className="text-blue-800 text-xs whitespace-nowrap overflow-hidden text-ellipsis">Bet locked for this round. Wait for results!</AlertDescription></Alert>')
-
           old_results = '{gameState.history.length > 0 ? <div className="flex gap-2 flex-wrap">{gameState.history.map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}'
           new_results = '{gameState.history.length > 0 ? <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 w-full">{gameState.history.slice(0, 10).map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className="flex justify-center"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div></div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}'
-          if old_results in s:
-              s = s.replace(old_results, new_results)
-
-          # Backend result settlement is authoritative; do not keep a local
-          # pending bet card after the server has finalized the round.
+          if old_results in s: s = s.replace(old_results, new_results)
           p.write_text(s)
           PY
       - name: Commit changes
@@ -60,3 +47,4 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "Fix Color Prediction wheel sync and final UI layout"
           git push
+# trigger
