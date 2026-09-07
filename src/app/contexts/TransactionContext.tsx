@@ -29,31 +29,57 @@ function _parseMetadata(raw: any) {
 }
 function _normalizeGameMetadata(amount: number, raw: any) {
   const metadata = _parseMetadata(raw);
-  const gameType = String(metadata.gameType || metadata.game || "").toLowerCase();
-  if (gameType === "color_game" && metadata.lobby == null && metadata.lobbyId == null) {
-    metadata.lobby = amount <= 20 ? "A" : amount <= 100 ? "B" : amount <= 1000 ? "C" : "D";
+  let gameType = String(metadata.gameType || metadata.game || metadata.game_type || "").toLowerCase().replace(/[-\s]/g, "_");
+  const description = String(metadata.__transactionDescription || "").toLowerCase();
+
+  // Older ledger rows may have a human description but incomplete metadata. Recover only
+  // the game identity that is explicitly present in that recorded description.
+  if (!gameType) {
+    if (description.includes("colour prediction") || description.includes("color prediction") || description.includes("colour game") || description.includes("color game")) gameType = "color_game";
+    else if (description.includes("dice clash")) gameType = "dice_clash";
+    else if (description.includes("dice royale")) gameType = "dice_royale";
+    else if (description.includes("dice arena")) gameType = "dice_arena";
+    else if (description.includes("coin flip")) gameType = "pvp_coinflip";
+    else if (description.includes("spin battle")) gameType = "spin_battle";
+    if (gameType) metadata.gameType = gameType;
+  } else {
+    metadata.gameType = gameType;
   }
+
+  // Colour Prediction is a lobby-based game. Preserve a recorded lobby; only use the
+  // established lobby bands when an older Colour Prediction record has no lobby field.
+  if (gameType === "color_game" || gameType === "color_prediction") {
+    if (metadata.lobby == null && metadata.lobbyId == null && metadata.lobbyName == null) {
+      metadata.lobby = amount <= 20 ? "A" : amount <= 50 ? "B" : amount <= 120 ? "C" : "D";
+    }
+  }
+
+  delete metadata.__transactionDescription;
   return metadata;
 }
 function _formatGameDescription(type: string, amount: number, metadata: any, fallback: string) {
   if (!["game_win", "game_loss", "game_bet", "game_void"].includes(type)) return fallback;
-  const gameType = String(metadata?.gameType || metadata?.game || "").toLowerCase();
+  const gameType = String(metadata?.gameType || metadata?.game || metadata?.game_type || "").toLowerCase().replace(/[-\s]/g, "_");
   const names: Record<string, string> = {
-    color_game: "Colour Prediction", color_prediction: "Colour Prediction", spin_battle: "Spin Battle",
+    color_game: "Colour Prediction", color_prediction: "Colour Prediction", colour_prediction: "Colour Prediction", spin_battle: "Spin Battle",
     dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena",
-    coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip", reaction_tap: "Reaction Tap",
+    coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip", pvp_coin_flip: "Coin Flip", reaction_tap: "Reaction Tap",
   };
   if (!gameType) return fallback;
   const game = names[gameType] || gameType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const action = type === "game_loss" ? "Loss" : type === "game_win" ? "Win" : type === "game_bet" ? "Bet" : "Void";
-  const lobby = metadata?.lobby ?? metadata?.lobbyId;
-  const stake = metadata?.stakeRoom ?? metadata?.stake ?? metadata?.stakeAmount ?? metadata?.roomStake;
-  const context = lobby != null && String(lobby) !== "" ? `Lobby ${String(lobby).replace(/^Lobby\s*/i, "")}` : stake != null && String(stake) !== "" ? `Stake Room $${Number(stake).toLocaleString()}` : null;
+  const lobby = metadata?.lobby ?? metadata?.lobbyName ?? metadata?.lobby_name ?? metadata?.lobbyId;
+  const stake = metadata?.stake ?? metadata?.stakeAmount ?? metadata?.roomStake ?? metadata?.stakeRoom ?? metadata?.stake_room;
+  // Lobby-based games use Lobby X. Stake-selection games use Stake Room $X.
+  const context = lobby != null && String(lobby).trim() !== ""
+    ? `Lobby ${String(lobby).replace(/^Lobby\s*/i, "")}`
+    : stake != null && String(stake).trim() !== "" ? `Stake Room $${Number(stake).toLocaleString()}` : null;
   return `${game} ${action}${context ? ` - ${context}` : ""}`;
 }
 function _backendToLocal(tx: any): Transaction {
   const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));
-  const metadata = _normalizeGameMetadata(Math.abs(amount), tx.metadata);
+  const rawMetadata = _parseMetadata(tx.metadata);
+  const metadata = _normalizeGameMetadata(Math.abs(amount), { ...rawMetadata, __transactionDescription: tx.description ?? "" });
   const fallbackDescription = tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction";
   return {
     id: tx.id,
