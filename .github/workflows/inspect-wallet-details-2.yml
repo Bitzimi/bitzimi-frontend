@@ -17,16 +17,13 @@ jobs:
           import re
           p=Path('src/app/pages/Wallet.tsx')
           s=p.read_text()
-          # Move an already-inserted helper out of the useEffect cleanup and into component scope.
-          bad=re.search(r'    // Cleanup on unmount\n(?P<helper>    const getTransactionDetailRows = \(tx: any, txDate: Date\) => \{.*?\n    \};)\n\n  return \(\) => \{', s, re.S)
+          bad=re.search(r'    // Cleanup on unmount\n(?P<helper>    const getTransactionDetailRows = \(tx: any, txDate: Date\) => \{.*?\n    \};)\n\n  return \(\) => \{',s,re.S)
           if bad:
-              helper=bad.group('helper')
+              helper=bad.group('helper').replace('    const getTransactionDetailRows','  const getTransactionDetailRows',1)
               s=s[:bad.start()]+'    // Cleanup on unmount\n    return () => {'+s[bad.end():]
-              marker='  return (\n    <ResponsiveLayout>'
-              if marker not in s: raise SystemExit('component return marker not found')
-              s=s.replace(marker, helper+'\n\n'+marker, 1)
-          # If a malformed helper remains inside JSX, remove that copy; the component-scope helper is authoritative.
-          s=s.replace('    const getTransactionDetailRows = (tx: any, txDate: Date) => {', '  const getTransactionDetailRows = (tx: any, txDate: Date) => {', 1)
+              idx=s.rfind('  return (')
+              if idx < 0: raise SystemExit('Wallet return not found')
+              s=s[:idx]+helper+'\n\n'+s[idx:]
           p.write_text(s)
           PY
       - name: Build and commit
@@ -37,4 +34,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/pages/Wallet.tsx
           git diff --cached --quiet || git commit -m "Place transaction detail helper correctly [transaction-ui-final]"
-          git push
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
