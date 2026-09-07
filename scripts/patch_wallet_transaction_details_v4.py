@@ -3,7 +3,22 @@ import re
 
 p=Path('src/app/pages/Wallet.tsx')
 s=p.read_text()
-helper=r'''  const getTransactionDetailRows = (tx: any, txDate: Date) => {
+
+# Recover the transaction detail helper if an earlier patch placed it inside the
+# useEffect cleanup. It must live at component scope, immediately before return().
+helper_match=re.search(r'    // Cleanup on unmount\n(?P<helper>    const getTransactionDetailRows = \(tx: any, txDate: Date\) => \{.*?\n    \};)\n\n  return \(\) => \{',s,re.S)
+if helper_match:
+    helper=helper_match.group('helper').replace('    const getTransactionDetailRows','  const getTransactionDetailRows',1)
+    s=s[:helper_match.start()]+'    // Cleanup on unmount\n    return () => {'+s[helper_match.end():]
+    idx=s.rfind('  return (')
+    if idx < 0: raise SystemExit('Wallet return not found')
+    s=s[:idx]+helper+'\n\n'+s[idx:]
+
+# If no helper exists, add the complete transaction-specific renderer at component scope.
+if 'const getTransactionDetailRows' not in s:
+    idx=s.rfind('  return (')
+    if idx < 0: raise SystemExit('Wallet return not found')
+    helper=r'''  const getTransactionDetailRows = (tx: any, txDate: Date) => {
     const m = tx.metadata ?? {};
     const type = String(tx.type ?? "").toLowerCase();
     const wallet = (v: any) => String(v ?? "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -56,11 +71,11 @@ helper=r'''  const getTransactionDetailRows = (tx: any, txDate: Date) => {
       if (m.tier != null) rows.push({label:"Tier", value:`Tier ${m.tier}`});
       if (m.eventType) rows.push({label:"Event", value:wallet(m.eventType)});
       if (m.rate != null) rows.push({label:"Rate", value:`${Number(m.rate)*100}%`});
+      if (m.sourceUserId) rows.push({label:"Source User", value:m.sourceUserId});
     } else if (type === "streak_reward") {
       rows.push({label:"From", value:m.sourceLabel ?? "Daily Streak"});
       if (m.rewardType) rows.push({label:"Reward Type", value:wallet(m.rewardType)});
       if (m.streakDay != null) rows.push({label:"Streak Day", value:`Day ${m.streakDay}`});
-      if (m.month) rows.push({label:"Month", value:m.month});
       rows.push({label:"To", value:m.destinationLabel ?? "Game Wallet"});
     } else if (type === "vip_purchase") {
       rows.push({label:"From", value:m.sourceLabel ?? "Game Wallet"});
@@ -80,7 +95,7 @@ helper=r'''  const getTransactionDetailRows = (tx: any, txDate: Date) => {
       rows.push({label:"From", value:m.sourceLabel ?? "Admin VIP Grant"});
       if (m.durationDays != null) rows.push({label:"Duration", value:`${m.durationDays} days`});
       if (m.reason) rows.push({label:"Reason", value:m.reason});
-    } else {
+    } else if (m.sourceLabel || m.destinationLabel) {
       if (m.sourceLabel) rows.push({label:"From", value:m.sourceLabel});
       if (m.destinationLabel) rows.push({label:"To", value:m.destinationLabel});
     }
@@ -88,23 +103,18 @@ helper=r'''  const getTransactionDetailRows = (tx: any, txDate: Date) => {
     return rows;
   };
 '''
-if 'const getTransactionDetailRows' not in s:
-    idx=s.rfind('  return (')
-    if idx < 0: raise SystemExit('Wallet return not found')
     s=s[:idx]+helper+'\n'+s[idx:]
+
 block=re.compile(r'\{\s*\[\s*\{\s*label:\s*"Transaction ID".*?\.filter\(Boolean\)\s*\.map\(\(row:\s*any,\s*i\)\s*=>\s*\(.*?\)\)\}',re.S)
 replacement='{getTransactionDetailRows(tx, txDate).map((row: any, i: number) => (\n                              <div key={i} className="flex justify-between items-start gap-4 text-xs">\n                                <span className="text-muted-foreground shrink-0">{row.label}</span>\n                                <span className="font-medium text-right">{row.value}</span>\n                              </div>\n                            ))}'
-s,n=block.subn(replacement,s)
+s,n=block.subn(replacement,s,count=1)
 print('full detail blocks replaced:',n)
-if n != 1:
-    raise SystemExit(f'Expected 1 active detail block, found {n}')
-# Replace the all-transactions modal block separately by scoping to the modal section.
+if n != 1: raise SystemExit(f'Expected 1 active detail block, found {n}')
 modal=s.find('{/* All Transactions Modal */}')
-if modal < 0: raise SystemExit('All Transactions Modal not found')
-head=s[:modal]; tail=s[modal:]
-m,n2=block.subn(replacement,tail,count=1)
-print('modal detail blocks replaced:',n2)
-if n2 != 1:
-    raise SystemExit(f'Expected 1 modal detail block, found {n2}')
-s=head+m
+if modal >= 0:
+    head=s[:modal]; tail=s[modal:]
+    tail,n2=block.subn(replacement,tail,count=1)
+    print('modal detail blocks replaced:',n2)
+    if n2 != 1: raise SystemExit(f'Expected 1 modal detail block, found {n2}')
+    s=head+tail
 p.write_text(s)
