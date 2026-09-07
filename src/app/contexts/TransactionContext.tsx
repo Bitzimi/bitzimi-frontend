@@ -8,9 +8,9 @@ function _mapBackendType(type: string): TransactionType {
     deposit: "deposit", withdrawal: "withdrawal", transfer: "transfer",
     game_win: "game_win", game_loss: "game_loss", game_bet: "game_bet", game_void: "game_void",
     task_reward: "task_reward", referral_bonus: "referral_bonus",
-    referral_earned: "referral_bonus", affiliate_earned: "referral_bonus",
-    affiliate_commission: "referral_bonus", commission: "referral_bonus",
-    vip_purchase: "withdrawal", streak_reward: "deposit",
+    referral_earned: "referral_bonus", affiliate_earned: "affiliate_commission",
+    affiliate_commission: "affiliate_commission", commission: "referral_bonus",
+    vip_purchase: "vip_purchase", streak_reward: "streak_reward",
   };
   return m[type] ?? "deposit";
 }
