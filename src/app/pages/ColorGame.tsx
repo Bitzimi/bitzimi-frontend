@@ -64,10 +64,11 @@ function toDisplayState(data: any) {
     blueTeam:    { players: data.bluePlayers ?? 0, totalAmount: data.blueTotal ?? 0 },
     history:     (data.history ?? [])
       .filter((h: any) => h.result)
-      .map((h: any) => ({ roundNumber: h.roundNumber, winner: h.result, timestamp: new Date(h.timestamp).getTime() })),
+      .sort((a: any, b: any) => Number(b.roundNumber) - Number(a.roundNumber))
+      .slice(0, 10)
+      .map((h: any) => ({ roundNumber: h.roundNumber, winner: h.result, timestamp: new Date(h.timestamp).getTime(), voided: h.voided === true })),
     currentRoundBets: data.currentBets ?? [],
     voided: data.voided ?? false,
-    lobbyPlayers: data.lobbyPlayers ?? 0,
   };
 }
 
