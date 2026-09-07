@@ -1,0 +1,25 @@
+name: Inspect wallet detail fields
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('src/app/pages/Wallet.tsx').read_text()
+          for term in ['Transaction ID','More Details','MORE DETAILS','Date & Time','expandedTransaction']:
+              print('\nTERM', term)
+              pos=0
+              while True:
+                  i=s.find(term,pos)
+                  if i<0: break
+                  print('POS',i)
+                  print(s[max(0,i-2500):i+5000])
+                  pos=i+len(term)
+          PY
