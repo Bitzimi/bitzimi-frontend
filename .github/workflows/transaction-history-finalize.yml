@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply final renderer
-        run: python3 scripts/finalize_transaction_history.py
+      - name: Repair helper scope
+        run: python3 scripts/repair_transaction_detail_scope.py
       - name: Build
         run: npm install && npm run build
       - name: Commit finalized renderer
