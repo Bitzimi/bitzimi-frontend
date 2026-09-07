@@ -1,1 +1,0 @@
-Temporary trigger; remove after transaction history verification.
