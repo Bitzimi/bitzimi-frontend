@@ -886,7 +886,7 @@ export function Wallet() {
           ) : (
             <div className="divide-y divide-border">
               {[...transactions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10).map((tx) => {
-                const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "vip_purchase";
+                const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "game_loss" || tx.type === "vip_purchase";
                 const isExpanded = expandedTransaction === tx.id;
                 const txDate = new Date(tx.createdAt);
                 return (
@@ -1644,7 +1644,7 @@ export function Wallet() {
                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .slice((txPage - 1) * TX_PAGE_SIZE, txPage * TX_PAGE_SIZE)
                   .map((tx) => {
-                    const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "vip_purchase";
+                    const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "game_loss" || tx.type === "vip_purchase";
                     const isExpanded = expandedTransaction === `all-${tx.id}`;
                     const txDate = new Date(tx.createdAt);
                     return (

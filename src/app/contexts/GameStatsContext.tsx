@@ -1,111 +1,28 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 
-type GameResult = {
-  id: string;
-  gameType: "color_prediction" | "football_ai" | "pvp_coinflip" | "spin_battle" | "reaction_tap" | "dice_duel";
-  lobby?: string;
-  betAmount: number;
-  winAmount: number;
-  profit: number; // Can be negative for losses
-  timestamp: string;
-  won: boolean;
-  opponent?: string; // For PvP games
-  outcome?: string; // For PvP games (e.g., "heads", "tails")
-};
-
-type GameStats = {
-  totalGames: number;
-  totalWins: number;
-  totalLosses: number;
-  totalProfit: number; // Net profit (wins - losses)
-  winRate: number; // Percentage
-  gameHistory: GameResult[];
-};
-
-type GameStatsContextType = {
-  stats: GameStats;
-  addGameResult: (result: Omit<GameResult, "id" | "timestamp">) => void;
-  resetStats: () => void;
-};
-
+type GameResult = { id: string; gameType: string; lobby?: string; betAmount: number; winAmount: number; profit: number; timestamp: string; won: boolean; opponent?: string; outcome?: string; };
+type GameStats = { totalGames: number; totalWins: number; totalLosses: number; totalProfit: number; winRate: number; gameHistory: GameResult[]; };
+type GameStatsContextType = { stats: GameStats; addGameResult: (result: Omit<GameResult, "id" | "timestamp">) => void; resetStats: () => void; refreshStatsFromBackend: () => Promise<void>; };
 const GameStatsContext = createContext<GameStatsContextType | undefined>(undefined);
-
-const INITIAL_STATS: GameStats = {
-  totalGames: 0,
-  totalWins: 0,
-  totalLosses: 0,
-  totalProfit: 0,
-  winRate: 0,
-  gameHistory: [],
-};
-
+const INITIAL_STATS: GameStats = { totalGames: 0, totalWins: 0, totalLosses: 0, totalProfit: 0, winRate: 0, gameHistory: [] };
+const API_BASE = (import.meta as any).env?.VITE_API_URL as string | undefined;
+function token() { return localStorage.getItem("bitzimi_access_token"); }
 export function GameStatsProvider({ children }: { children: ReactNode }) {
-  const [stats, setStats] = useState<GameStats>(() => {
+  const [stats, setStats] = useState<GameStats>(INITIAL_STATS);
+  const refreshStatsFromBackend = useCallback(async () => {
+    if (!API_BASE || !token()) return;
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const stored = localStorage.getItem("bitzimiGameStats");
-        if (stored) {
-          return JSON.parse(stored);
-        }
-      }
-    } catch (e) {
-      console.error("Error loading game stats:", e);
-    }
-    return INITIAL_STATS;
-  });
-
-  // Save to localStorage whenever stats change
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        localStorage.setItem("bitzimiGameStats", JSON.stringify(stats));
-      }
-    } catch (e) {
-      console.error("Error saving game stats:", e);
-    }
-  }, [stats]);
-
-  const addGameResult = (result: Omit<GameResult, "id" | "timestamp">) => {
-    setStats((prev) => {
-      const newResult: GameResult = {
-        ...result,
-        id: `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date().toISOString(),
-      };
-
-      const totalGames = prev.totalGames + 1;
-      const totalWins = prev.totalWins + (result.won ? 1 : 0);
-      const totalLosses = prev.totalLosses + (result.won ? 0 : 1);
-      const totalProfit = prev.totalProfit + result.profit;
-      const winRate = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
-
-      return {
-        totalGames,
-        totalWins,
-        totalLosses,
-        totalProfit,
-        winRate,
-        gameHistory: [newResult, ...prev.gameHistory].slice(0, 100), // Keep last 100 games
-      };
-    });
-  };
-
-  const resetStats = () => {
-    setStats(INITIAL_STATS);
-    localStorage.removeItem("bitzimiGameStats");
-  };
-
-  return (
-    <GameStatsContext.Provider value={{ stats, addGameResult, resetStats }}>
-      {children}
-    </GameStatsContext.Provider>
-  );
+      const res = await fetch(`${API_BASE}/api/v1/games/stats`, { headers: { Authorization: `Bearer ${token()}` } });
+      if (!res.ok) return;
+      const json = await res.json();
+      const o = json?.data?.overall;
+      if (!o) return;
+      setStats({ totalGames: Number(o.totalGames ?? 0), totalWins: Number(o.wins ?? 0), totalLosses: Number(o.losses ?? 0), totalProfit: Number(o.profit ?? 0), winRate: Number(o.winRate ?? 0), gameHistory: [] });
+    } catch {}
+  }, []);
+  useEffect(() => { refreshStatsFromBackend(); }, [refreshStatsFromBackend]);
+  const addGameResult = (_result: Omit<GameResult, "id" | "timestamp">) => { refreshStatsFromBackend(); };
+  const resetStats = () => { refreshStatsFromBackend(); };
+  return <GameStatsContext.Provider value={{ stats, addGameResult, resetStats, refreshStatsFromBackend }}>{children}</GameStatsContext.Provider>;
 }
-
-export function useGameStats() {
-  const context = useContext(GameStatsContext);
-  if (!context) {
-    throw new Error("useGameStats must be used within GameStatsProvider");
-  }
-  return context;
-}
+export function useGameStats() { const context = useContext(GameStatsContext); if (!context) throw new Error("useGameStats must be used within GameStatsProvider"); return context; }

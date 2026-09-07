@@ -67,6 +67,7 @@ function toDisplayState(data: any) {
       .map((h: any) => ({ roundNumber: h.roundNumber, winner: h.result, timestamp: new Date(h.timestamp).getTime() })),
     currentRoundBets: data.currentBets ?? [],
     voided: data.voided ?? false,
+    lobbyPlayers: data.lobbyPlayers ?? 0,
   };
 }
 
@@ -109,6 +110,7 @@ export default function ColorGame() {
   const prevPhase      = useRef<string | null>(null);
   const pollRef        = useRef<ReturnType<typeof setInterval> | null>(null);
   const resultModalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lobbyPresenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const unsub = appLifecycleService.onResume(() => setLifecycleSync(n => n + 1));
@@ -118,6 +120,22 @@ export default function ColorGame() {
   useEffect(() => () => {
     if (resultModalTimerRef.current) clearTimeout(resultModalTimerRef.current);
   }, []);
+
+  // Server-authoritative lobby presence.
+  useEffect(() => {
+    if (!useBackend()) return;
+    const token = getToken();
+    if (!token) return;
+    const heartbeat = async () => {
+      try { await fetch(`${API_BASE}/api/v1/games/color/lobbies/${lid}/presence`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }); } catch {}
+    };
+    heartbeat();
+    lobbyPresenceRef.current = setInterval(heartbeat, 5000);
+    return () => {
+      if (lobbyPresenceRef.current) clearInterval(lobbyPresenceRef.current);
+      try { fetch(`${API_BASE}/api/v1/games/color/lobbies/${lid}/presence`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` }, keepalive: true }).catch(() => {}); } catch {}
+    };
+  }, [lid]);
 
   const handleSnapshot = (data: any) => {
     const s = toDisplayState(data);
@@ -314,6 +332,7 @@ export default function ColorGame() {
             <div className="flex items-center gap-3">
               <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
               <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase">{gameState.state}</Badge>
+              <Badge variant="outline" className="gap-1"><Users className="h-3 w-3" />{gameState.lobbyPlayers} in lobby</Badge>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => setShowRules(true)}><Info className="mr-2 h-4 w-4" />Rules</Button>

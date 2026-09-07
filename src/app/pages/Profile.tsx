@@ -67,6 +67,7 @@ export default function Profile() {
   const { balances, getTotalBalance, gameEarnings } = useWallet();
   const { formatCurrency, formatCurrencyNoDecimals, currency, t } = useSettings();
   const { stats } = useGameStats();
+  const [backendGameActivity, setBackendGameActivity] = useState({ totalGames: 0, wins: 0, winRate: 0, totalEarned: 0 });
   const { isVerified, verificationStatus: ctxVerificationStatus } = useVerification();
   const { identity, refreshIdentity } = useIdentity();
   const { addNotification } = useNotifications();
@@ -126,12 +127,7 @@ export default function Profile() {
   const [countryPickerSearch, setCountryPickerSearch] = useState("");
 
   // Game activity data - USE REAL STATS FROM CONTEXT
-  const gameActivity = {
-    totalGames: stats.totalGames,
-    wins: stats.totalWins,
-    winRate: stats.winRate,
-    totalEarned: stats.totalProfit,
-  };
+  const gameActivity = backendGameActivity;
 
   // ── Backend data loading ────────────────────────────────────────────────────
   const [canEditUsername, setCanEditUsername] = useState(true);
@@ -157,7 +153,7 @@ export default function Profile() {
     const statsJson = await apiFetch("/api/v1/games/stats");
     if (statsJson?.data?.overall) {
       const o = statsJson.data.overall;
-      // Backend stats are the source of truth; they are also available via GameStatsContext
+      setBackendGameActivity({ totalGames: Number(o.totalGames ?? 0), wins: Number(o.wins ?? 0), winRate: Number(o.winRate ?? 0), totalEarned: Number(o.profit ?? 0) });
     }
 
     // Fetch VIP status from backend
