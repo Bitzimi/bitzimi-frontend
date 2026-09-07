@@ -320,26 +320,23 @@ export default function ColorGame() {
         </Button>
       </div>
 
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg md:text-2xl font-semibold">Red vs Blue Game</h2>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 rounded-full animate-pulse">
-                <div className="w-2 h-2 bg-white rounded-full animate-ping" />
-                <span className="text-xs font-bold text-white uppercase tracking-wide">LIVE</span>
-              </div>
+      <div className="mb-5">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-x-3 gap-y-1">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2>
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+                <span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span>
+              </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 mt-1">
               <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
-              <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase">{gameState.state}</Badge>
-              
-              
-              
-              
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowRules(true)}><Info className="mr-2 h-4 w-4" />Rules</Button>
+          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-2.5 shrink-0"><Info className="mr-1.5 h-3.5 w-3.5" />Rules</Button>
+          <div />
+          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2 text-xs justify-self-end">{gameState.state}</Badge>
         </div>
       </div>
 
@@ -431,7 +428,7 @@ export default function ColorGame() {
             <Button onClick={() => handleBet("blue")} disabled={isBettingClosed || !betAmount || !isBetValid() || placingBet} className="h-12 bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-300 disabled:cursor-not-allowed">{currentRoundBet ? "Bet Placed" : placingBet ? "Placing..." : "Bet on Blue"}</Button>
           </div>
 
-          {currentRoundBet && <Alert className="border-blue-200 bg-blue-50"><AlertCircle className="h-4 w-4 text-blue-600" /><AlertDescription className="text-blue-800">Bet locked for this round. Wait for results!</AlertDescription></Alert>}
+          {currentRoundBet && <Alert className="border-blue-200 bg-blue-50 py-1.5 px-2.5"><AlertCircle className="h-3.5 w-3.5 text-blue-600 shrink-0" /><AlertDescription className="text-blue-800 text-xs whitespace-nowrap overflow-hidden text-ellipsis">Bet locked for this round. Wait for results!</AlertDescription></Alert>}
           {gameState.state !== "WAITING" && !currentRoundBet && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{gameState.state === "SPINNING" ? "Determining winner..." : "Showing results..."}</AlertDescription></Alert>}
         </CardContent>
       </Card>
@@ -439,7 +436,7 @@ export default function ColorGame() {
       <Card className="mb-4">
         <CardHeader><div className="flex items-center justify-between"><CardTitle className="text-base">Previous Results</CardTitle><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-2"><Shield className="h-4 w-4" />Verify Fairness</Button></div></CardHeader>
         <CardContent>
-          {gameState.history.length > 0 ? <div className="flex gap-2 flex-wrap">{gameState.history.map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}
+          {gameState.history.length > 0 ? <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 w-full">{gameState.history.slice(0, 10).map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className="flex justify-center"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div></div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}
         </CardContent>
       </Card>
 
