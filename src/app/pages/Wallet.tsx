@@ -1643,7 +1643,9 @@ export function Wallet() {
                     const isExpanded = expandedTransaction === `all-${tx.id}`;
                     const txDate = new Date(tx.createdAt);
                     const gameView = getGameTransactionView(tx);
-                  const getTransactionDetailRows = (tx: any, txDate: Date) => {
+                ;
+
+const getTransactionDetailRows = (tx: any, txDate: Date) => {
     const m = tx.metadata ?? {};
     const type = String(tx.type ?? "").toLowerCase();
     const wallet = (v: any) => String(v ?? "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -1770,8 +1772,8 @@ export function Wallet() {
     }
     rows.push({label:"Date & Time", value:txDate.toLocaleString()});
     return rows;
-  };
-
+  }
+  // [transaction-ui-final]
   return (
                       <div key={tx.id}>
                         <div
