@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Patch active Wallet transaction details
-        run: python3 scripts/patch_wallet_transaction_details_v2.py
+        run: python3 scripts/patch_wallet_transaction_details_v3.py
       - name: Verify and commit
         run: |
           npm install
