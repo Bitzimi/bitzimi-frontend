@@ -2,6 +2,7 @@ name: Fix Phase 2 Color Prediction and Wallet Details
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -15,221 +16,41 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          p = Path('app/pages/ColorGame.tsx')
-          s = p.read_text()
-          old = '''      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg md:text-2xl font-semibold">Red vs Blue Game</h2>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 rounded-full animate-pulse">
-                <div className="w-2 h-2 bg-white rounded-full animate-ping" />
-                <span className="text-xs font-bold text-white uppercase tracking-wide">LIVE</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
-              <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase">
-                {gameState.state}
-              </Badge>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setShowRules(true)}>
-            <Info className="mr-2 h-4 w-4" />Rules
-          </Button>
-        </div>
-      </div>
-'''
-          new = '''      {/* Header */}
-      <div className="mb-4">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
-          <div className="min-w-0">
-            <h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-3 shrink-0">
-            <Info className="mr-1.5 h-4 w-4" />Rules
-          </Button>
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0">
-              <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-              <span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span>
-            </div>
-            <p className="text-sm md:text-base text-gray-600 truncate">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
-          </div>
-          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2.5 text-xs justify-self-end">
-            {gameState.state}
-          </Badge>
-        </div>
-      </div>
-'''
+          p=Path('app/pages/ColorGame.tsx'); s=p.read_text()
+          old='''      {/* Header */}\n      <div className="mb-6">\n        <div className="flex items-center justify-between">\n          <div>\n            <div className="flex items-center gap-2 mb-1">\n              <h2 className="text-lg md:text-2xl font-semibold">Red vs Blue Game</h2>\n              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 rounded-full animate-pulse">\n                <div className="w-2 h-2 bg-white rounded-full animate-ping" />\n                <span className="text-xs font-bold text-white uppercase tracking-wide">LIVE</span>\n              </div>\n            </div>\n            <div className="flex items-center gap-3">\n              <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>\n              <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase">\n                {gameState.state}\n              </Badge>\n            </div>\n          </div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)}>\n            <Info className="mr-2 h-4 w-4" />Rules\n          </Button>\n        </div>\n      </div>\n'''
+          new='''      {/* Header */}\n      <div className="mb-4">\n        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">\n          <div className="min-w-0"><h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2></div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-3 shrink-0"><Info className="mr-1.5 h-4 w-4" />Rules</Button>\n          <div className="flex items-center gap-2 min-w-0">\n            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0"><div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /><span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span></div>\n            <p className="text-sm md:text-base text-gray-600 truncate">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>\n          </div>\n          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2.5 text-xs justify-self-end">{gameState.state}</Badge>\n        </div>\n      </div>\n'''
           if old not in s: raise SystemExit('ColorGame header block not found')
-          p.write_text(s.replace(old, new, 1))
-
-          p = Path('app/contexts/TransactionContext.tsx')
-          s = p.read_text()
-          s = s.replace('''    game_win: "game_win", game_loss: "game_loss", game_bet: "game_loss",''', '''    game_win: "game_win", game_loss: "game_loss", game_bet: "game_bet", game_void: "game_void",''')
-          old_fn = '''function _backendToLocal(tx: any): Transaction {
-  const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));
-  return {
-    id: tx.id,
-    type: _mapBackendType(tx.type),
-    amount: Math.abs(amount),
-    status: _mapBackendStatus(tx.status),
-    createdAt: tx.createdAt,
-    description: tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction",
-    metadata: tx.metadata
-      ? (typeof tx.metadata === "string" ? JSON.parse(tx.metadata) : tx.metadata)
-      : undefined,
-  };
-}
-'''
-          new_fn = '''function _backendToLocal(tx: any): Transaction {
-  const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));
-  let metadata: Record<string, any> = {};
-  if (tx.metadata) {
-    if (typeof tx.metadata === "object") metadata = { ...tx.metadata };
-    else {
-      try { metadata = JSON.parse(tx.metadata); } catch { metadata = {}; }
-    }
-  }
-  if (tx.fromWallet != null && metadata.fromWallet == null) metadata.fromWallet = tx.fromWallet;
-  if (tx.toWallet != null && metadata.toWallet == null) metadata.toWallet = tx.toWallet;
-  if (tx.referenceId != null && metadata.referenceId == null) metadata.referenceId = tx.referenceId;
-  if (tx.referenceType != null && metadata.referenceType == null) metadata.referenceType = tx.referenceType;
-  if (tx.fee != null && metadata.fee == null) metadata.fee = tx.fee;
-  if (tx.netAmount != null && metadata.netAmount == null) metadata.netAmount = tx.netAmount;
-  return {
-    id: tx.id,
-    type: _mapBackendType(tx.type),
-    amount: Math.abs(amount),
-    status: _mapBackendStatus(tx.status),
-    createdAt: tx.createdAt,
-    description: tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction",
-    metadata,
-  };
-}
-'''
-          if old_fn not in s: raise SystemExit('TransactionContext mapper not found')
-          s = s.replace(old_fn, new_fn, 1)
-          s = s.replace('''  | "deposit" 
-  | "withdrawal" 
-  | "transfer" 
-  | "game_win" 
-  | "game_loss" 
-  | "task_reward" 
-''', '''  | "deposit" 
-  | "withdrawal" 
-  | "transfer" 
-  | "game_bet"
-  | "game_win" 
-  | "game_loss" 
-  | "game_void"
-  | "task_reward" 
-''')
+          p.write_text(s.replace(old,new,1))
+          p=Path('app/contexts/TransactionContext.tsx'); s=p.read_text()
+          s=s.replace('game_win: "game_win", game_loss: "game_loss", game_bet: "game_loss",','game_win: "game_win", game_loss: "game_loss", game_bet: "game_bet", game_void: "game_void",')
+          old='''function _backendToLocal(tx: any): Transaction {\n  const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));\n  return {\n    id: tx.id,\n    type: _mapBackendType(tx.type),\n    amount: Math.abs(amount),\n    status: _mapBackendStatus(tx.status),\n    createdAt: tx.createdAt,\n    description: tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction",\n    metadata: tx.metadata\n      ? (typeof tx.metadata === "string" ? JSON.parse(tx.metadata) : tx.metadata)\n      : undefined,\n  };\n}\n'''
+          new='''function _backendToLocal(tx: any): Transaction {\n  const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));\n  let metadata: Record<string, any> = {};\n  if (tx.metadata) {\n    if (typeof tx.metadata === "object") metadata = { ...tx.metadata };\n    else { try { metadata = JSON.parse(tx.metadata); } catch { metadata = {}; } }\n  }\n  if (tx.fromWallet != null && metadata.fromWallet == null) metadata.fromWallet = tx.fromWallet;\n  if (tx.toWallet != null && metadata.toWallet == null) metadata.toWallet = tx.toWallet;\n  if (tx.referenceId != null && metadata.referenceId == null) metadata.referenceId = tx.referenceId;\n  if (tx.referenceType != null && metadata.referenceType == null) metadata.referenceType = tx.referenceType;\n  if (tx.fee != null && metadata.fee == null) metadata.fee = tx.fee;\n  if (tx.netAmount != null && metadata.netAmount == null) metadata.netAmount = tx.netAmount;\n  return { id: tx.id, type: _mapBackendType(tx.type), amount: Math.abs(amount), status: _mapBackendStatus(tx.status), createdAt: tx.createdAt, description: tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction", metadata };\n}\n'''
+          if old not in s: raise SystemExit('Transaction mapper not found')
+          s=s.replace(old,new,1)
+          s=s.replace('''  | "deposit" \n  | "withdrawal" \n  | "transfer" \n  | "game_win" \n  | "game_loss" \n  | "task_reward" \n''','''  | "deposit" \n  | "withdrawal" \n  | "transfer" \n  | "game_bet"\n  | "game_win" \n  | "game_loss" \n  | "game_void"\n  | "task_reward" \n''')
           p.write_text(s)
-
-          p = Path('app/pages/Wallet.tsx')
-          s = p.read_text()
-          marker = '''  const getTransactionTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      deposit:              "Deposit",
-      withdrawal:           "Withdrawal",
-      transfer:             "Transfer",
-      game_win:             "Game Win",
-      game_bet:             "Game Bet",
-      task_reward:          "Task Reward",
-      referral_bonus:       "Referral Bonus",
-      vip_purchase:         "VIP Subscription",
-      affiliate_commission: "Affiliate Commission",
-      streak_reward:        "Daily Streak Reward",
-    };
-    return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());
-  };
-'''
-          helper = '''  const getTransactionTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      deposit:              "Deposit",
-      withdrawal:           "Withdrawal",
-      transfer:             "Transfer",
-      game_win:             "Game Win",
-      game_loss:            "Game Loss",
-      game_void:            "Game Void",
-      game_bet:             "Game Bet",
-      task_reward:          "Task Reward",
-      referral_bonus:       "Referral Bonus",
-      vip_purchase:         "VIP Subscription",
-      affiliate_commission: "Affiliate Commission",
-      streak_reward:        "Daily Streak Reward",
-    };
-    return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());
-  };
-
-  const getGameTransactionDisplay = (tx: any) => {
-    let metadata: Record<string, any> = {};
-    if (tx.metadata && typeof tx.metadata === "object") metadata = tx.metadata;
-    else if (tx.metadata) { try { metadata = JSON.parse(tx.metadata); } catch {} }
-    const names: Record<string, string> = {
-      color_game: "Color Prediction", color_prediction: "Color Prediction", spin_battle: "Spin Battle",
-      dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena",
-      coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip", reaction_tap: "Reaction Tap",
-    };
-    const gameKey = String(metadata.gameType || metadata.game || "").toLowerCase();
-    const gameName = gameKey ? (names[gameKey] || gameKey.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase())) : null;
-    const lobby = metadata.lobbyId ?? metadata.lobby ?? metadata.roomLobby;
-    const stake = metadata.stakeRoom ?? metadata.stake ?? metadata.stakeAmount ?? metadata.roomStake;
-    const context = lobby != null && String(lobby) !== ""
-      ? { label: "Lobby", value: `Lobby ${String(lobby).replace(/^Lobby\\s*/i, "").toUpperCase()}` }
-      : stake != null && String(stake) !== ""
-        ? { label: "Room", value: formatCurrency(Number(stake)) }
-        : null;
-    const outcomes: Record<string, string> = { game_win: "Win", game_loss: "Loss", game_void: "Void", game_bet: "Bet" };
-    const title = gameName && outcomes[tx.type]
-      ? `${gameName} ${outcomes[tx.type]}${context ? ` - ${context.value}` : ""}`
-      : (tx.description || getTransactionTypeLabel(tx.type));
-    return { title, gameName, context };
-  };
-'''
-          if marker not in s: raise SystemExit('Wallet transaction helper marker not found')
-          s = s.replace(marker, helper, 1)
-          s = s.replace('const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "vip_purchase";', 'const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "game_loss" || tx.type === "vip_purchase";', 1)
-          s = s.replace('{tx.description}', '{getGameTransactionDisplay(tx).title}', 1)
-          s = s.replace('{ label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },', '{ label: "Transaction ID", value: <span className="font-mono text-xs">{tx.id}</span> },', 1)
-          old_game = '''                            tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,
-                            tx.metadata?.lobby ? { label: "Lobby", value: `Lobby ${tx.metadata.lobby}` } : null,
-                            tx.metadata?.stake ? { label: "Room", value: formatCurrency(tx.metadata.stake) } : null,
-'''
-          new_game = '''                            (() => { const d = getGameTransactionDisplay(tx); return d.gameName ? { label: "Game", value: d.gameName } : null; })(),
-                            (() => { const d = getGameTransactionDisplay(tx); return d.context ? { label: d.context.label, value: d.context.value } : null; })(),
-'''
-          if old_game not in s: raise SystemExit('Wallet game detail block not found')
-          s = s.replace(old_game, new_game, 1)
-          old_tail = '''                            tx.metadata?.bankName ? { label: "Bank", value: tx.metadata.bankName } : null,
-                            tx.metadata?.txHash ? {
-'''
-          new_tail = '''                            tx.metadata?.bankName ? { label: "Bank", value: tx.metadata.bankName } : null,
-                            tx.metadata?.destination ? { label: "Destination", value: tx.metadata.destination } : null,
-                            tx.metadata?.walletDebits ? { label: "Wallet Debits", value: Object.entries(tx.metadata.walletDebits).map(([k,v]) => `${k}: ${formatCurrency(Number(v))}`).join(" · ") } : null,
-                            tx.metadata?.referenceType ? { label: "Reference Type", value: String(tx.metadata.referenceType).replace(/_/g, " ") } : null,
-                            tx.metadata?.referenceId ? { label: "Reference ID", value: <span className="font-mono text-xs break-all">{tx.metadata.referenceId}</span> } : null,
-                            tx.metadata?.fee != null && Number(tx.metadata.fee) > 0 ? { label: "Fee", value: formatCurrency(Number(tx.metadata.fee)) } : null,
-                            tx.metadata?.netAmount != null ? { label: "Net Amount", value: formatCurrency(Number(tx.metadata.netAmount)) } : null,
-                            ...Object.entries(tx.metadata || {})
-                              .filter(([key, value]) => value != null && value !== "" && !["fromWallet","toWallet","gameType","game","lobby","lobbyId","roomLobby","stake","stakeRoom","stakeAmount","roomStake","subscriptionType","subscriptionPlan","rewardType","streakDay","method","network","bankName","destination","walletDebits","referenceType","referenceId","fee","netAmount","txHash","depositId","withdrawalId"].includes(key) && typeof value !== "object")
-                              .map(([key, value]) => ({ label: key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").replace(/^./, c => c.toUpperCase()), value: String(value) })),
-                            tx.metadata?.txHash ? {
-'''
-          if old_tail not in s: raise SystemExit('Wallet metadata insertion point not found')
-          s = s.replace(old_tail, new_tail, 1)
+          p=Path('app/pages/Wallet.tsx'); s=p.read_text()
+          marker='''  const getTransactionTypeLabel = (type: string) => {\n    const labels: Record<string, string> = {\n      deposit:              "Deposit",\n      withdrawal:           "Withdrawal",\n      transfer:             "Transfer",\n      game_win:             "Game Win",\n      game_bet:             "Game Bet",\n      task_reward:          "Task Reward",\n      referral_bonus:       "Referral Bonus",\n      vip_purchase:         "VIP Subscription",\n      affiliate_commission: "Affiliate Commission",\n      streak_reward:        "Daily Streak Reward",\n    };\n    return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());\n  };\n'''
+          helper='''  const getTransactionTypeLabel = (type: string) => {\n    const labels: Record<string, string> = { deposit:"Deposit", withdrawal:"Withdrawal", transfer:"Transfer", game_win:"Game Win", game_loss:"Game Loss", game_void:"Game Void", game_bet:"Game Bet", task_reward:"Task Reward", referral_bonus:"Referral Bonus", vip_purchase:"VIP Subscription", affiliate_commission:"Affiliate Commission", streak_reward:"Daily Streak Reward" };\n    return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());\n  };\n  const getGameTransactionDisplay = (tx: any) => {\n    let m: Record<string, any> = {}; if (tx.metadata && typeof tx.metadata === "object") m=tx.metadata; else if (tx.metadata) { try { m=JSON.parse(tx.metadata); } catch {} }\n    const names: Record<string,string>={color_game:"Color Prediction",color_prediction:"Color Prediction",spin_battle:"Spin Battle",dice_clash:"Dice Clash",dice_royale:"Dice Royale",dice_arena:"Dice Arena",coin_flip:"Coin Flip",pvp_coinflip:"Coin Flip",reaction_tap:"Reaction Tap"};\n    const key=String(m.gameType||m.game||"").toLowerCase(); const gameName=key?(names[key]||key.replace(/_/g," ").replace(/\\b\\w/g,c=>c.toUpperCase())):null;\n    const lobby=m.lobbyId??m.lobby??m.roomLobby; const stake=m.stakeRoom??m.stake??m.stakeAmount??m.roomStake;\n    const context=lobby!=null&&String(lobby)!==""?{label:"Lobby",value:`Lobby ${String(lobby).replace(/^Lobby\\s*/i,"").toUpperCase()}`}:stake!=null&&String(stake)!==""?{label:"Room",value:formatCurrency(Number(stake))}:null;\n    const outcomes:Record<string,string>={game_win:"Win",game_loss:"Loss",game_void:"Void",game_bet:"Bet"};\n    return {title:gameName&&outcomes[tx.type]?`${gameName} ${outcomes[tx.type]}${context?` - ${context.value}`:""}`:(tx.description||getTransactionTypeLabel(tx.type)),gameName,context};\n  };\n'''
+          if marker not in s: raise SystemExit('Wallet helper marker not found')
+          s=s.replace(marker,helper,1)
+          s=s.replace('const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "vip_purchase";','const isDebit = tx.type === "withdrawal" || tx.type === "game_bet" || tx.type === "game_loss" || tx.type === "vip_purchase";',1)
+          s=s.replace('{tx.description}','{getGameTransactionDisplay(tx).title}',1)
+          s=s.replace('{ label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },','{ label: "Transaction ID", value: <span className="font-mono text-xs">{tx.id}</span> },',1)
+          old='''                            tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,\n                            tx.metadata?.lobby ? { label: "Lobby", value: `Lobby ${tx.metadata.lobby}` } : null,\n                            tx.metadata?.stake ? { label: "Room", value: formatCurrency(tx.metadata.stake) } : null,\n'''
+          new='''                            (() => { const d=getGameTransactionDisplay(tx); return d.gameName ? {label:"Game",value:d.gameName}:null; })(),\n                            (() => { const d=getGameTransactionDisplay(tx); return d.context ? {label:d.context.label,value:d.context.value}:null; })(),\n'''
+          if old not in s: raise SystemExit('Wallet game detail block not found')
+          s=s.replace(old,new,1)
+          old='''                            tx.metadata?.bankName ? { label: "Bank", value: tx.metadata.bankName } : null,\n                            tx.metadata?.txHash ? {\n'''
+          new='''                            tx.metadata?.bankName ? { label: "Bank", value: tx.metadata.bankName } : null,\n                            tx.metadata?.destination ? { label: "Destination", value: tx.metadata.destination } : null,\n                            tx.metadata?.walletDebits ? { label: "Wallet Debits", value: Object.entries(tx.metadata.walletDebits).map(([k,v]) => `${k}: ${formatCurrency(Number(v))}`).join(" · ") } : null,\n                            tx.metadata?.referenceType ? { label: "Reference Type", value: String(tx.metadata.referenceType).replace(/_/g," ") } : null,\n                            tx.metadata?.referenceId ? { label: "Reference ID", value: <span className="font-mono text-xs break-all">{tx.metadata.referenceId}</span> } : null,\n                            tx.metadata?.fee != null && Number(tx.metadata.fee)>0 ? { label:"Fee",value:formatCurrency(Number(tx.metadata.fee))}:null,\n                            tx.metadata?.netAmount != null ? { label:"Net Amount",value:formatCurrency(Number(tx.metadata.netAmount))}:null,\n                            ...Object.entries(tx.metadata||{}).filter(([k,v])=>v!=null&&v!==""&&!['fromWallet','toWallet','gameType','game','lobby','lobbyId','roomLobby','stake','stakeRoom','stakeAmount','roomStake','subscriptionType','subscriptionPlan','rewardType','streakDay','method','network','bankName','destination','walletDebits','referenceType','referenceId','fee','netAmount','txHash','depositId','withdrawalId'].includes(k)&&typeof v!=="object").map(([k,v])=>({label:k.replace(/([A-Z])/g," $1").replace(/_/g," ").replace(/^./,c=>c.toUpperCase()),value:String(v)})),\n                            tx.metadata?.txHash ? {\n'''
+          if old not in s: raise SystemExit('Wallet metadata block not found')
+          s=s.replace(old,new,1)
           p.write_text(s)
-
           PY
           npm install --no-audit --no-fund
           npm run build
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app/pages/ColorGame.tsx app/contexts/TransactionContext.tsx app/pages/Wallet.tsx
-          if git diff --cached --quiet; then echo 'No source changes were produced.'; exit 1; fi
-          git commit -m 'Fix Color Prediction header and transaction details'
+          git commit -m 'Fix Color Prediction header and transaction details' || exit 0
           git push
