@@ -934,7 +934,7 @@ export function Wallet() {
                       <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
                         <div className="space-y-2">
                           {[
-                            { label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },
+                            { label: "Transaction ID", value: <span className="font-mono text-xs">{tx.id}</span> },
                             { label: "Type", value: getTransactionTypeLabel(tx.type) },
                             { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
                             { label: "Status", value: getStatusBadge(tx.status) },
@@ -942,7 +942,7 @@ export function Wallet() {
                             tx.metadata?.toWallet ? { label: "To", value: `${tx.metadata.toWallet} Wallet` } : null,
                             tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,
                             tx.metadata?.lobby ? { label: "Lobby", value: `Lobby ${tx.metadata.lobby}` } : null,
-                            tx.metadata?.stake ? { label: "Room", value: formatCurrency(tx.metadata.stake) } : null,
+                            !tx.metadata?.lobby && tx.metadata?.stake ? { label: "Stake Room", value: formatCurrency(tx.metadata.stake) } : null,
                             tx.metadata?.subscriptionType ? { label: "Subscription", value: tx.metadata.subscriptionType } : null,
                             tx.metadata?.subscriptionPlan ? { label: "Plan", value: tx.metadata.subscriptionPlan } : null,
                             tx.metadata?.rewardType ? { label: "Reward Type", value: tx.metadata.rewardType.replace(/_/g, " ") } : null,
@@ -1681,7 +1681,7 @@ export function Wallet() {
                           <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
                             <div className="space-y-2">
                               {[
-                                { label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },
+                                { label: "Transaction ID", value: <span className="font-mono text-xs">{tx.id}</span> },
                                 { label: "Type", value: getTransactionTypeLabel(tx.type) },
                                 { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
                                 { label: "Status", value: getStatusBadge(tx.status) },

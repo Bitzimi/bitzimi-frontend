@@ -57,6 +57,7 @@ function toDisplayState(data: any) {
     roundNumber:      data.roundNumber as number,
     dailyRoundNumber: (data.dailyRoundNumber ?? data.roundNumber) as number,
     roundId:          (data.roundId ?? null) as string | null,
+    spinAngle:         typeof data.spinAngle === "number" ? data.spinAngle : null,
     serverSeedHash:   (data.serverSeedHash ?? null) as string | null,
     timeRemaining:    data.timeRemaining as number,
     winner:           (data.result ?? null) as "red" | "blue" | null,
@@ -296,7 +297,7 @@ export default function ColorGame() {
 
   if (!gameState) {
     return (
-      <ResponsiveLayout>
+      <ResponsiveLayout hideFloatingOnlineCounter>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
@@ -313,7 +314,7 @@ export default function ColorGame() {
   const isSpinning = gameState.state === "SPINNING";
 
   return (
-    <ResponsiveLayout>
+    <ResponsiveLayout hideFloatingOnlineCounter>
       <div className="mb-4">
         <Button variant="ghost" size="sm" onClick={() => navigate("/game/lobby-selection")} className="mb-3 -ml-2">
           <ArrowLeft className="h-4 w-4 mr-2" />Back to Lobbies
@@ -439,7 +440,7 @@ export default function ColorGame() {
       <Card className="mb-4">
         <CardHeader><div className="flex items-center justify-between"><CardTitle className="text-base">Previous Results</CardTitle><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-2"><Shield className="h-4 w-4" />Verify Fairness</Button></div></CardHeader>
         <CardContent>
-          {gameState.history.length > 0 ? <div className="flex gap-2 flex-wrap">{gameState.history.map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}
+          {gameState.history.length > 0 ? <div className="grid grid-cols-5 gap-3 w-fit mx-auto">{gameState.history.map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}
         </CardContent>
       </Card>
 

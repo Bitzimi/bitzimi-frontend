@@ -6,9 +6,10 @@ import { FloatingOnlineCounter } from "./FloatingOnlineCounter";
 
 interface ResponsiveLayoutProps {
   children: ReactNode;
+  hideFloatingOnlineCounter?: boolean;
 }
 
-export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
+export function ResponsiveLayout({ children, hideFloatingOnlineCounter = false }: ResponsiveLayoutProps) {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-background">
       {/* Desktop Sidebar - hidden on mobile */}
@@ -28,7 +29,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       <MobileNav />
 
       {/* Floating Online Counter - Mobile only, top-right */}
-      <FloatingOnlineCounter />
+      {!hideFloatingOnlineCounter && <FloatingOnlineCounter />}
     </div>
   );
 }

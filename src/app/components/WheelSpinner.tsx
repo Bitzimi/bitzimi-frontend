@@ -7,9 +7,10 @@ interface WheelSpinnerProps {
   timeRemaining?: number;
   gameState?: "WAITING" | "SPINNING" | "RESULT";
   roundNumber?: number;
+  spinAngle?: number | null;
 }
 
-export function WheelSpinner({ isSpinning, winner, timeRemaining = 0, gameState = "WAITING", roundNumber }: WheelSpinnerProps) {
+export function WheelSpinner({ isSpinning, winner, spinAngle = null, timeRemaining = 0, gameState = "WAITING", roundNumber }: WheelSpinnerProps) {
   const [rotation, setRotation] = useState(0);
   const [showWinner, setShowWinner] = useState(false);
 
@@ -25,32 +26,18 @@ export function WheelSpinner({ isSpinning, winner, timeRemaining = 0, gameState 
   // Wheel layout: Left half (0-180°) = BLUE, Right half (180-360°) = RED
   const getTargetRotation = () => {
     if (!winner) return 0;
-    
-    const baseRotation = 1800; // 5 full spins
-    
-    // Generate random angle within the correct segment
-    let winnerOffset;
-    if (winner === "red") {
-      // RED segment: 180° to 360° (right half)
-      // Random angle between 180 and 360
-      winnerOffset = 180 + Math.random() * 180;
-    } else {
-      // BLUE segment: 0° to 180° (left half)  
-      // Random angle between 0 and 180
-      winnerOffset = Math.random() * 180;
-    }
-    
-    return baseRotation + winnerOffset;
+    const normalized = Math.max(0, Math.min(359.999, Number(spinAngle ?? (winner === "red" ? 270 : 90))));
+    return 1800 + normalized;
   };
 
   // Update rotation when spinning starts
   useEffect(() => {
-    if (isSpinning && winner) {
+    if ((isSpinning || gameState === "RESULT") && winner) {
       const targetRotation = getTargetRotation();
       setRotation(targetRotation);
       setShowWinner(false);
     }
-  }, [isSpinning, winner]);
+  }, [isSpinning, gameState, winner, spinAngle]);
 
   // Show winner overlay only when in RESULT state with a winner
   useEffect(() => {
