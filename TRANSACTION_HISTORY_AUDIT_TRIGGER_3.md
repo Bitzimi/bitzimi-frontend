@@ -1,0 +1,1 @@
+Temporary trigger for transaction history patch v2; remove after verification.
