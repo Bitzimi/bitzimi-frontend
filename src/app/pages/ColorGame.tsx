@@ -333,6 +333,7 @@ export default function ColorGame() {
               <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>
               <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase">{gameState.state}</Badge>
               <Badge variant="outline" className="gap-1"><Users className="h-3 w-3" />{gameState.lobbyPlayers} in lobby</Badge>
+              <Badge variant="outline" className="gap-1"><Users className="h-3 w-3" />{gameState.lobbyPlayers} in lobby</Badge>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => setShowRules(true)}><Info className="mr-2 h-4 w-4" />Rules</Button>
