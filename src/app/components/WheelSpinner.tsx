@@ -21,25 +21,12 @@ export function WheelSpinner({ isSpinning, winner, timeRemaining = 0, gameState 
     }
   }, [gameState, timeRemaining, roundNumber]);
 
-  // Calculate rotation based on winner from server
-  // Wheel layout: Left half (0-180°) = BLUE, Right half (180-360°) = RED
+  // Calculate one deterministic target angle for the authoritative winner.
+  // Both devices therefore stop at exactly the same point in the winning half.
   const getTargetRotation = () => {
     if (!winner) return 0;
-    
-    const baseRotation = 1800; // 5 full spins
-    
-    // Generate random angle within the correct segment
-    let winnerOffset;
-    if (winner === "red") {
-      // RED segment: 180° to 360° (right half)
-      // Random angle between 180 and 360
-      winnerOffset = 180 + Math.random() * 180;
-    } else {
-      // BLUE segment: 0° to 180° (left half)  
-      // Random angle between 0 and 180
-      winnerOffset = Math.random() * 180;
-    }
-    
+    const baseRotation = 1800;
+    const winnerOffset = winner === "red" ? 270 : 90;
     return baseRotation + winnerOffset;
   };
 

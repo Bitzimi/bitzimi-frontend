@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router";
 import { Users } from "lucide-react";
 import { onlineUsersService } from "../services/onlineUsersService";
 
@@ -7,6 +8,9 @@ import { onlineUsersService } from "../services/onlineUsersService";
  * Hidden on desktop (lg+) since desktop shows it in the header
  */
 export function FloatingOnlineCounter() {
+  const location = useLocation();
+  if (location.pathname.startsWith("/game/color/")) return null;
+
   const [onlineCount, setOnlineCount] = useState(onlineUsersService.getOnlineCount());
 
   useEffect(() => {
