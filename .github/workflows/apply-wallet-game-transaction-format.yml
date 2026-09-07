@@ -21,7 +21,6 @@ jobs:
           from pathlib import Path
           p = Path('src/app/pages/Wallet.tsx')
           s = p.read_text()
-
           old = '''  const getGameTransactionView = (tx: any) => {
     if (!tx?.type || !["game_win", "game_loss", "game_bet", "game_void"].includes(tx.type)) return null;
     const meta = tx.metadata || {};
@@ -45,7 +44,6 @@ jobs:
       contextValue: lobby || (stakeRoom ? formatCurrency(Number(stake)) : null),
     };
   };'''
-
           new = '''  const getGameTransactionView = (tx: any) => {
     if (!tx?.type || !["game_win", "game_loss", "game_bet", "game_void"].includes(tx.type)) return null;
     const meta = tx.metadata || {};
@@ -59,21 +57,13 @@ jobs:
     const game = gameNames[gameType] || (gameType ? gameType.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase()) : "Game");
     const action = tx.type === "game_loss" ? "Loss" : tx.type === "game_win" ? "Win" : tx.type === "game_bet" ? "Bet" : "Void";
     const rawLobby = meta.lobby ?? meta.lobbyName ?? meta.lobby_name;
-    const lobby = rawLobby != null && String(rawLobby).trim() !== ""
-      ? `Lobby ${String(rawLobby).replace(/^Lobby\\s*/i, "")}`
-      : null;
+    const lobby = rawLobby != null && String(rawLobby).trim() !== "" ? `Lobby ${String(rawLobby).replace(/^Lobby\\s*/i, "")}` : null;
     const rawStake = meta.stake ?? meta.stakeAmount ?? meta.roomStake ?? meta.stakeRoom ?? meta.stake_room;
     const stake = rawStake != null && rawStake !== "" && Number.isFinite(Number(rawStake)) ? Number(rawStake) : null;
     const stakeRoom = !lobby && stake != null ? `Stake Room ${formatCurrency(stake)}` : null;
     const context = lobby || stakeRoom;
-    return {
-      game, action, context,
-      title: `${game} ${action}${context ? ` - ${context}` : ""}`,
-      contextLabel: lobby ? "Lobby" : stakeRoom ? "Stake Room" : null,
-      contextValue: lobby || (stakeRoom ? formatCurrency(stake!) : null),
-    };
+    return { game, action, context, title: `${game} ${action}${context ? ` - ${context}` : ""}`, contextLabel: lobby ? "Lobby" : stakeRoom ? "Stake Room" : null, contextValue: lobby || (stakeRoom ? formatCurrency(stake!) : null) };
   };
-
   const getDisplayTransactionId = (tx: any) => {
     const explicit = tx?.metadata?.transactionId || tx?.metadata?.transaction_id;
     if (explicit) return String(explicit);
@@ -82,11 +72,8 @@ jobs:
     const suffix = String(tx.id || "").replace(/-/g, "").slice(0, 9).toLowerCase() || "000000000";
     return `tx_${safeTimestamp}_${suffix}`;
   };'''
-
-          if old not in s:
-              raise SystemExit('Game transaction formatter block not found')
+          if old not in s: raise SystemExit('formatter block not found')
           s = s.replace(old, new, 1)
-
           s = s.replace('{tx.description}', '{gameView?.title || tx.description}', 1)
           s = s.replace('{ label: "Transaction ID", value: <span className="font-mono text-xs">{typeof tx.id === "string" ? tx.id.slice(0, 23) : tx.id}</span> },', '{ label: "Transaction ID", value: <span className="font-mono text-xs break-all">{getDisplayTransactionId(tx)}</span> },', 1)
           p.write_text(s)
@@ -99,3 +86,5 @@ jobs:
           git add src/app/pages/Wallet.tsx
           git commit -m 'Apply wallet game transaction format' || exit 0
           git push
+
+# retrigger
