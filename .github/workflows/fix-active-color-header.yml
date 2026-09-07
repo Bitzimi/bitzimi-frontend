@@ -1,32 +1,19 @@
-name: Fix active Color Prediction header source
+name: Apply transaction UI patch
 on:
   push:
     branches: [main]
 permissions:
   contents: write
 jobs:
-  fix:
-    if: github.actor != 'github-actions[bot]'
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch active source and verify build
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('src/app/pages/ColorGame.tsx')
-          s = p.read_text()
-          old = '''      <div className="mb-5">\n        <div className="grid grid-cols-[1fr_auto] items-start gap-x-3 gap-y-1">\n          <div className="min-w-0">\n            <div className="flex items-center gap-2 min-w-0">\n              <h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2>\n              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0">\n                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />\n                <span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span>\n              </span>\n            </div>\n            <div className="flex items-center gap-2 mt-1">\n              <p className="text-sm md:text-base text-gray-600">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>\n            </div>\n          </div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-2.5 shrink-0"><Info className="mr-1.5 h-3.5 w-3.5" />Rules</Button>\n          <div />\n          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2 text-xs justify-self-end">{gameState.state}</Badge>\n        </div>\n      </div>\n'''
-          new = '''      {/* Compact two-row header: title + Rules, then LIVE + round + WAITING */}\n      <div className="mb-4">\n        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">\n          <div className="min-w-0"><h2 className="text-lg md:text-2xl font-semibold truncate">Red vs Blue Game</h2></div>\n          <Button variant="outline" size="sm" onClick={() => setShowRules(true)} className="h-8 px-3 shrink-0"><Info className="mr-1.5 h-4 w-4" />Rules</Button>\n          <div className="flex items-center gap-2 min-w-0">\n            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-600 rounded-full animate-pulse shrink-0"><div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /><span className="text-[10px] font-bold text-white uppercase tracking-wide">LIVE</span></div>\n            <p className="text-sm md:text-base text-gray-600 truncate">Round #{gameState.dailyRoundNumber ?? gameState.roundNumber} <span className="text-xs text-gray-400">today</span></p>\n          </div>\n          <Badge variant={gameState.state === "WAITING" ? "default" : "secondary"} className="uppercase h-7 px-2.5 text-xs justify-self-end">{gameState.state}</Badge>\n        </div>\n      </div>\n'''
-          if old not in s:
-              raise SystemExit('Active ColorGame header block not found')
-          p.write_text(s.replace(old, new, 1))
-          PY
-          npm install --no-audit --no-fund
-          npm run build
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/app/pages/ColorGame.tsx
-          git commit -m 'Fix active Color Prediction header layout'
+      - run: python3 scripts/patch_wallet_transaction_details_v2.py
+      - run: npm install && npm run build
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/Wallet.tsx
+          git diff --cached --quiet || git commit -m "Fix transaction-specific wallet detail UI [transaction-ui-fixed]"
           git push
