@@ -1,0 +1,25 @@
+name: Final transaction history repair
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: "!contains(github.event.head_commit.message, '[transaction-ui-final]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply final renderer
+        run: python3 scripts/patch_wallet_transaction_details_v4.py
+      - name: Build and commit
+        run: |
+          npm install
+          npm run build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/Wallet.tsx
+          git diff --cached --quiet || git commit -m "Finalize transaction-specific wallet details [transaction-ui-final]"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
