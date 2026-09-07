@@ -336,6 +336,7 @@ export default function ColorGame() {
               
               
               
+              
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => setShowRules(true)}><Info className="mr-2 h-4 w-4" />Rules</Button>
