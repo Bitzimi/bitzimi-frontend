@@ -958,9 +958,10 @@ export function Wallet() {
                     {/* Expanded Details */}
                     {isExpanded && (
                       <div className="px-4 pb-4 pt-3 bg-muted/30 dark:bg-white/[0.02] border-t border-border">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">More Details</p>
                         <div className="space-y-2">
                           {[
-                            { label: "Transaction ID", value: <span className="font-mono text-xs break-all">{tx.id}</span> },
+                            { label: "Transaction ID", value: <span className="font-mono text-xs">{typeof tx.id === "string" ? tx.id.slice(0, 23) : tx.id}</span> },
                             { label: "Type", value: getTransactionTypeLabel(tx.type) },
                             { label: "Amount", value: <span className="font-semibold">{formatCurrency(tx.amount)}</span> },
                             { label: "Status", value: getStatusBadge(tx.status) },
