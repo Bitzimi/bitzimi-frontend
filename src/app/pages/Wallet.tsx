@@ -1660,6 +1660,10 @@ export function Wallet() {
     if (type === "transfer") {
       if (m.fromWallet) rows.push({label:"From", value:`${wallet(m.fromWallet)} Wallet`});
       if (m.toWallet) rows.push({label:"To", value:`${wallet(m.toWallet)} Wallet`});
+      if (m.taskTitle) rows.push({label:"Task", value:m.taskTitle});
+      if (m.taskId) rows.push({label:"Task ID", value:m.taskId});
+      if (m.workerId) rows.push({label:"Worker", value:m.workerId});
+      if (m.reason) rows.push({label:"Reason", value:m.reason});
     } else if (type === "deposit" || type === "withdrawal") {
       if (m.method) rows.push({label:"Method", value:wallet(m.method)});
       if (m.network) rows.push({label:"Network", value:m.network});
@@ -1701,7 +1705,6 @@ export function Wallet() {
       rows.push({label:"From", value:m.sourceLabel ?? "Daily Streak"});
       if (m.rewardType) rows.push({label:"Reward Type", value:wallet(m.rewardType)});
       if (m.streakDay != null) rows.push({label:"Streak Day", value:`Day ${m.streakDay}`});
-      if (m.month) rows.push({label:"Month", value:m.month});
       rows.push({label:"To", value:m.destinationLabel ?? "Game Wallet"});
     } else if (type === "vip_purchase") {
       rows.push({label:"From", value:m.sourceLabel ?? "Game Wallet"});
@@ -1721,7 +1724,47 @@ export function Wallet() {
       rows.push({label:"From", value:m.sourceLabel ?? "Admin VIP Grant"});
       if (m.durationDays != null) rows.push({label:"Duration", value:`${m.durationDays} days`});
       if (m.reason) rows.push({label:"Reason", value:m.reason});
+    } else if (type === "football_points_conversion") {
+      rows.push({label:"From", value:m.sourceLabel ?? "Football Points"});
+      if (m.pointsConsumed != null) rows.push({label:"Points Converted", value:Number(m.pointsConsumed).toLocaleString()});
+      if (m.batches != null) rows.push({label:"Batches", value:m.batches});
+      if (m.usdEarned != null) rows.push({label:"USD Earned", value:formatCurrency(Number(m.usdEarned))});
+      rows.push({label:"To", value:m.destinationLabel ?? "Game Wallet"});
+    } else if (type === "featured_payment") {
+      rows.push({label:"From", value:m.sourceLabel ?? (m.fromWallet ? `${wallet(m.fromWallet)} Wallet` : "Task Wallet")});
+      if (m.title) rows.push({label:"Task", value:m.title});
+      if (m.taskId) rows.push({label:"Task ID", value:m.taskId});
+      if (m.durationDays != null) rows.push({label:"Duration", value:`${m.durationDays} days`});
+      if (m.locations) rows.push({label:"Locations", value:Array.isArray(m.locations) ? m.locations.join(", ") : m.locations});
+    } else if (type === "featured_refund") {
+      rows.push({label:"From", value:"Featured Placement Refund"});
+      if (m.taskId) rows.push({label:"Task ID", value:m.taskId});
+      if (m.durationDays != null) rows.push({label:"Duration", value:`${m.durationDays} days`});
+      if (m.reason) rows.push({label:"Reason", value:m.reason});
+      rows.push({label:"To", value:m.destinationLabel ?? "Task Wallet"});
+    } else if (type === "auction_bid") {
+      rows.push({label:"From", value:m.fromWallet ? `${wallet(m.fromWallet)} Wallet` : "Game Wallet"});
+      if (m.title) rows.push({label:"Auction", value:m.title});
+      if (m.auctionId) rows.push({label:"Auction ID", value:m.auctionId});
+      if (m.bidNumber != null) rows.push({label:"Bid Number", value:`#${m.bidNumber}`});
+    } else if (type === "auction_reward") {
+      rows.push({label:"From", value:m.sourceLabel ?? "Auction Reward"});
+      if (m.auctionTitle) rows.push({label:"Auction", value:m.auctionTitle});
+      if (m.auctionId) rows.push({label:"Auction ID", value:m.auctionId});
+      if (m.rewardType) rows.push({label:"Reward Type", value:wallet(m.rewardType)});
+      rows.push({label:"To", value:m.destinationLabel ?? "Game Wallet"});
+    } else if (type === "admin_credit" || type === "admin_debit") {
+      if (m.reason) rows.push({label:"Reason", value:m.reason});
+      if (m.adminId) rows.push({label:"Admin", value:m.adminId});
+      if (m.balanceBefore != null) rows.push({label:"Balance Before", value:formatCurrency(Number(m.balanceBefore))});
+      if (m.fromWallet) rows.push({label:"From", value:`${wallet(m.fromWallet)} Wallet`});
+      if (m.toWallet) rows.push({label:"To", value:`${wallet(m.toWallet)} Wallet`});
+    } else if (type === "wallet_freeze" || type === "wallet_unfreeze") {
+      rows.push({label:"Wallet", value:m.fromWallet || m.toWallet ? `${wallet(m.fromWallet ?? m.toWallet)} Wallet` : "Wallet"});
+      if (m.reason) rows.push({label:"Reason", value:m.reason});
+      if (m.adminId) rows.push({label:"Admin", value:m.adminId});
     } else if (m.sourceLabel || m.destinationLabel) {
+
       if (m.sourceLabel) rows.push({label:"From", value:m.sourceLabel});
       if (m.destinationLabel) rows.push({label:"To", value:m.destinationLabel});
     }
