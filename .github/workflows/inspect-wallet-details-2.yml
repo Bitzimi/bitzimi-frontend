@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Repair Wallet.tsx
-        run: python3 scripts/patch_wallet_transaction_details_v6.py
+      - name: Correct helper scope and streak details
+        run: python3 scripts/fix_wallet_transaction_helper_scope.py
       - name: Build and commit
         run: |
           npm install
@@ -18,7 +18,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/app/pages/Wallet.tsx
-          git diff --cached --quiet || git commit -m "Finalize category-aware wallet transaction details [transaction-ui-final]"
+          git diff --cached --quiet || git commit -m "Correct transaction detail helper scope [transaction-ui-final]"
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
