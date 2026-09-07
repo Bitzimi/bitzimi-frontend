@@ -3,29 +3,19 @@ import { useLocation } from "react-router";
 import { Users } from "lucide-react";
 import { onlineUsersService } from "../services/onlineUsersService";
 
-/**
- * Floating online user counter that appears at the top-right of the page on mobile
- * Hidden on desktop (lg+) since desktop shows it in the header
- */
+/** Floating online user counter shown outside individual Color Prediction game screens. */
 export function FloatingOnlineCounter() {
   const location = useLocation();
-  if (location.pathname.startsWith("/game/color/")) return null;
+  if (location.pathname.toLowerCase().includes("/color")) return null;
 
   const [onlineCount, setOnlineCount] = useState(onlineUsersService.getOnlineCount());
 
   useEffect(() => {
-    // Update count every second
-    const interval = setInterval(() => {
-      setOnlineCount(onlineUsersService.getOnlineCount());
-    }, 1000);
-
+    const interval = setInterval(() => setOnlineCount(onlineUsersService.getOnlineCount()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Format number with commas
-  const formatCount = (count: number): string => {
-    return count.toLocaleString();
-  };
+  const formatCount = (count: number): string => count.toLocaleString();
 
   return (
     <div className="lg:hidden fixed top-16 right-4 z-30">
@@ -34,9 +24,7 @@ export function FloatingOnlineCounter() {
           <Users className="h-3 w-3 text-green-600 dark:text-green-400" />
           <span className="absolute -top-0.5 -right-0.5 w-1 h-1 bg-green-500 rounded-full animate-pulse" />
         </div>
-        <span className="text-[10px] font-bold text-green-700 dark:text-green-300">
-          {formatCount(onlineCount)}
-        </span>
+        <span className="text-[10px] font-bold text-green-700 dark:text-green-300">{formatCount(onlineCount)}</span>
       </div>
     </div>
   );
