@@ -22,26 +22,46 @@ function _mapBackendStatus(status: string): TransactionStatus {
   };
   return m[status] ?? "pending";
 }
-function _normalizeGameMetadata(type: string, amount: number, raw: any) {
-  const metadata = raw && typeof raw === "object" ? { ...raw } : {};
+function _parseMetadata(raw: any) {
+  if (!raw) return {};
+  if (typeof raw === "object") return { ...raw };
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+function _normalizeGameMetadata(amount: number, raw: any) {
+  const metadata = _parseMetadata(raw);
   const gameType = String(metadata.gameType || metadata.game || "").toLowerCase();
   if (gameType === "color_game" && metadata.lobby == null && metadata.lobbyId == null) {
-    const lobby = amount <= 20 ? "A" : amount <= 100 ? "B" : amount <= 1000 ? "C" : "D";
-    metadata.lobby = lobby;
+    metadata.lobby = amount <= 20 ? "A" : amount <= 100 ? "B" : amount <= 1000 ? "C" : "D";
   }
   return metadata;
 }
+function _formatGameDescription(type: string, amount: number, metadata: any, fallback: string) {
+  if (!["game_win", "game_loss", "game_bet", "game_void"].includes(type)) return fallback;
+  const gameType = String(metadata?.gameType || metadata?.game || "").toLowerCase();
+  const names: Record<string, string> = {
+    color_game: "Colour Prediction", color_prediction: "Colour Prediction", spin_battle: "Spin Battle",
+    dice_clash: "Dice Clash", dice_royale: "Dice Royale", dice_arena: "Dice Arena",
+    coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip", reaction_tap: "Reaction Tap",
+  };
+  if (!gameType) return fallback;
+  const game = names[gameType] || gameType.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const action = type === "game_loss" ? "Loss" : type === "game_win" ? "Win" : type === "game_bet" ? "Bet" : "Void";
+  const lobby = metadata?.lobby ?? metadata?.lobbyId;
+  const stake = metadata?.stakeRoom ?? metadata?.stake ?? metadata?.stakeAmount ?? metadata?.roomStake;
+  const context = lobby != null && String(lobby) !== "" ? `Lobby ${String(lobby).replace(/^Lobby\s*/i, "")}` : stake != null && String(stake) !== "" ? `Stake Room $${Number(stake).toLocaleString()}` : null;
+  return `${game} ${action}${context ? ` - ${context}` : ""}`;
+}
 function _backendToLocal(tx: any): Transaction {
   const amount = typeof tx.amount === "number" ? tx.amount : parseFloat(String(tx.netAmount ?? tx.amount ?? 0));
-  const parsedMetadata = tx.metadata ? (typeof tx.metadata === "string" ? (() => { try { return JSON.parse(tx.metadata); } catch { return {}; } })() : tx.metadata) : {};
-  const metadata = _normalizeGameMetadata(tx.type, Math.abs(amount), parsedMetadata);
+  const metadata = _normalizeGameMetadata(Math.abs(amount), tx.metadata);
+  const fallbackDescription = tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction";
   return {
     id: tx.id,
     type: _mapBackendType(tx.type),
     amount: Math.abs(amount),
     status: _mapBackendStatus(tx.status),
     createdAt: tx.createdAt,
-    description: tx.description ?? tx.type?.replace(/_/g, " ") ?? "Transaction",
+    description: _formatGameDescription(tx.type, Math.abs(amount), metadata, fallbackDescription),
     metadata,
   };
 }
