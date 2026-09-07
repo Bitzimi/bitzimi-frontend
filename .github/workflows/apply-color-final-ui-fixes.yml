@@ -9,23 +9,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch UI and animation
+      - name: Patch UI, animation and wallet game transaction presentation
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
           p = Path('src/app/components/FloatingOnlineCounter.tsx')
           s = p.read_text()
-          s = s.replace('import { useState, useEffect } from "react";', 'import { useState, useEffect } from "react";\nimport { useLocation } from "react-router";')
-          s = s.replace('export function FloatingOnlineCounter() {\n  const [onlineCount', 'export function FloatingOnlineCounter() {\n  const location = useLocation();\n  if (location.pathname.startsWith("/game/color/")) return null;\n\n  const [onlineCount')
+          if 'useLocation' not in s:
+              s = s.replace('import { useState, useEffect } from "react";', 'import { useState, useEffect } from "react";\nimport { useLocation } from "react-router";')
+          if 'location.pathname.startsWith("/game/color/")' not in s:
+              s = s.replace('export function FloatingOnlineCounter() {\n  const [onlineCount', 'export function FloatingOnlineCounter() {\n  const location = useLocation();\n  if (location.pathname.startsWith("/game/color/")) return null;\n\n  const [onlineCount')
           p.write_text(s)
 
           p = Path('src/app/components/WheelSpinner.tsx')
           s = p.read_text()
-          start = s.index('  // Calculate rotation based on winner from server')
-          end = s.index('  // Update rotation when spinning starts')
-          replacement = '''  // Calculate one deterministic target angle for the authoritative winner.\n  // Both devices therefore stop at exactly the same point in the winning half.\n  const getTargetRotation = () => {\n    if (!winner) return 0;\n    const baseRotation = 1800;\n    const winnerOffset = winner === "red" ? 270 : 90;\n    return baseRotation + winnerOffset;\n  };\n\n'''
-          s = s[:start] + replacement + s[end:]
+          if 'getTargetRotation' not in s:
+              start = s.index('  // Calculate rotation based on winner from server')
+              end = s.index('  // Update rotation when spinning starts')
+              replacement = '''  // Calculate one deterministic target angle for the authoritative winner.\n  // Both devices therefore stop at exactly the same point in the winning half.\n  const getTargetRotation = () => {\n    if (!winner) return 0;\n    const baseRotation = 1800;\n    const winnerOffset = winner === "red" ? 270 : 90;\n    return baseRotation + winnerOffset;\n  };\n\n'''
+              s = s[:start] + replacement + s[end:]
           p.write_text(s)
 
           p = Path('src/app/pages/ColorGame.tsx')
@@ -38,13 +41,27 @@ jobs:
           new_results = '{gameState.history.length > 0 ? <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 w-full">{gameState.history.slice(0, 10).map((r: any) => <div key={`${r.roundNumber}-${r.timestamp}`} className="flex justify-center"><div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs ${r.winner === "red" ? "bg-red-500" : "bg-blue-500"}`} title={`Round ${r.roundNumber} — ${r.winner?.toUpperCase()} won`}>{r.roundNumber}</div></div>)}</div> : <p className="text-sm text-gray-500">No previous results yet</p>}'
           if old_results in s: s = s.replace(old_results, new_results)
           p.write_text(s)
+
+          # Standardize every game transaction's user-facing title/details.
+          p = Path('src/app/pages/Wallet.tsx')
+          s = p.read_text()
+          s = s.replace('      game_win:             "Game Win",\n      game_bet:             "Game Bet",', '      game_win:             "Game Win",\n      game_loss:            "Game Loss",\n      game_bet:             "Game Bet",')
+          marker = '  return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());\n  };\n\n  return ('
+          helper = '''  return labels[type] || type.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase());\n  };\n\n  const getGameTransactionView = (tx: any) => {\n    if (!tx?.type || !["game_win", "game_loss", "game_bet", "game_void"].includes(tx.type)) return null;\n    const meta = tx.metadata || {};\n    const gameType = String(meta.gameType || meta.game || "").toLowerCase();\n    const gameNames: Record<string, string> = {\n      color_game: "Colour Prediction", color_prediction: "Colour Prediction",\n      spin_battle: "Spin Battle", dice_clash: "Dice Clash", dice_royale: "Dice Royale",\n      dice_arena: "Dice Arena", coin_flip: "Coin Flip", pvp_coinflip: "Coin Flip",\n      reaction_tap: "Reaction Tap",\n    };\n    const game = gameNames[gameType] || (gameType ? gameType.replace(/_/g, " ").replace(/\\b\\w/g, c => c.toUpperCase()) : "Game");\n    const action = tx.type === "game_loss" ? "Loss" : tx.type === "game_win" ? "Win" : tx.type === "game_bet" ? "Bet" : "Void";\n    const lobby = meta.lobby ? `Lobby ${String(meta.lobby).replace(/^Lobby\\s*/i, "")}` : null;\n    const stake = meta.stake ?? meta.stakeAmount ?? meta.roomStake ?? meta.stakeRoom;\n    const stakeRoom = stake != null ? `Stake Room ${formatCurrency(Number(stake))}` : null;\n    const context = lobby || stakeRoom;\n    return {\n      game, action, context,\n      title: `${game} ${action}${context ? ` - ${context}` : ""}`,\n      contextLabel: lobby ? "Lobby" : stakeRoom ? "Stake Room" : null,\n      contextValue: lobby || (stakeRoom ? formatCurrency(Number(stake)) : null),\n    };\n  };\n\n  return ('''
+          if marker in s and 'const getGameTransactionView' not in s:
+              s = s.replace(marker, helper)
+          s = s.replace('                const txDate = new Date(tx.createdAt);\n                return (', '                const txDate = new Date(tx.createdAt);\n                const gameView = getGameTransactionView(tx);\n                return (')
+          s = s.replace('{tx.description}</p>', '{gameView?.title ?? tx.description}</p>')
+          s = s.replace('{ label: "Platform Reference", value: <span className="font-mono text-xs">{tx.id}</span> },', '{ label: "Transaction ID", value: <span className="font-mono text-xs break-all">{tx.id}</span> },')
+          s = s.replace('                            tx.metadata?.gameType ? { label: "Game", value: tx.metadata.gameType.replace(/_/g, " ") } : null,\n                            tx.metadata?.lobby ? { label: "Lobby", value: `Lobby ${tx.metadata.lobby}` } : null,\n                            tx.metadata?.stake ? { label: "Room", value: formatCurrency(tx.metadata.stake) } : null,', '                            gameView ? { label: "Game", value: gameView.game } : null,\n                            gameView?.contextLabel ? { label: gameView.contextLabel, value: gameView.contextValue } : null,')
+          p.write_text(s)
           PY
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app/components/FloatingOnlineCounter.tsx src/app/components/WheelSpinner.tsx src/app/pages/ColorGame.tsx
+          git add src/app/components/FloatingOnlineCounter.tsx src/app/components/WheelSpinner.tsx src/app/pages/ColorGame.tsx src/app/pages/Wallet.tsx
           git diff --cached --quiet && exit 0
-          git commit -m "Fix Color Prediction wheel sync and final UI layout"
+          git commit -m "Standardize Color Prediction and game transaction display"
           git push
 # trigger
