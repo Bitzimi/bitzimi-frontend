@@ -15,8 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-      - run: npm ci
+      - run: npm install
       - name: Apply UI cleanup
         run: |
           python3 <<'PY'
@@ -24,23 +23,11 @@ jobs:
           import re
           p = Path('src/app/pages/ColorGame.tsx')
           s = p.read_text()
-          # The in-game lobby occupant badge is not part of the requested UI.
-          # Remove the state field too so no future UI can accidentally render it here.
           s = re.sub(r'\n    lobbyPlayers: data\.lobbyPlayers \?\? 0,', '', s)
-          # Previous Results is a server/global-per-lobby feed. Render only the 10
-          # newest entries returned by the backend; older rows remain server-side.
           old = 'history:     (data.history ?? [])\n      .filter((h: any) => h.result)\n      .map((h: any) => ({ roundNumber: h.roundNumber, winner: h.result, timestamp: new Date(h.timestamp).getTime() })),'
-          new = 'history:     (data.history ?? [])\n      .filter((h: any) => h.result)\n      .sort((a: any, b: any) => Number(b.roundNumber) - Number(a.roundNumber))\n      .slice(0, 10)\n      .map((h: any) => ({ roundNumber: h.roundNumber, winner: h.result, timestamp: new Date(h.timestamp).getTime(), voided: h.voided === true })), '
-          if old in s:
-              s = s.replace(old, new)
+          new = 'history:     (data.history ?? [])\n      .filter((h: any) => h.result)\n      .sort((a: any, b: any) => Number(b.roundNumber) - Number(a.roundNumber))\n      .slice(0, 10)\n      .map((h: any) => ({ roundNumber: h.roundNumber, winner: h.result, timestamp: new Date(h.timestamp).getTime(), voided: h.voided === true })),'
+          if old in s: s = s.replace(old, new)
           p.write_text(s)
-
-          # Make the wheel explicitly server-authoritative for voided rounds too:
-          # a void only affects settlement; the winning colour is still displayed.
-          w = Path('src/app/components/WheelSpinner.tsx')
-          ws = w.read_text()
-          ws = ws.replace('if (isSpinning && winner) {', 'if (isSpinning && winner) {')
-          w.write_text(ws)
           PY
       - name: Verify
         run: npm run build
