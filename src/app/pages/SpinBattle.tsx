@@ -708,7 +708,13 @@ export default function SpinBattle() {
                             </div>
                           </div>
                           {isWinner && <Trophy className="h-5 w-5 text-yellow-500" />}
-                          <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(stake)}</p>
+                          <div className="text-right shrink-0">
+                  {isMe && lobbyState.myBet?.amount != null ? (
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(lobbyState.myBet.amount)}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">In round</p>
+                  )}
+                </div>
                         </div>
                       );
                     })
