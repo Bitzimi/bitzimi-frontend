@@ -75,6 +75,7 @@ interface LobbyState {
   players:        BackendPlayer[];
   myBet:          { inRound: boolean; amount: number | null } | null;
   recentWinners: BackendWinner[];
+  history?: Array<{ roundNumber:number; lobbyId:string|null; betAmount:number; won:boolean|null; payout:number; timestamp:number }>;
   verificationId?: string | null;
   serverSeedHash?: string | null;
 }
@@ -187,6 +188,7 @@ export default function SpinBattle() {
   // ── Process backend snapshot ─────────────────────────────────────────────────
   const handleLobbySnapshot = useCallback((data: LobbyState) => {
     setLobbyState(data);
+    if (Array.isArray(data.history)) setUserHistory(data.history);
 
     // Detect round transition for history reset
     if (data.roundNumber !== processedRound.current && data.phase === "waiting") {
@@ -241,12 +243,6 @@ export default function SpinBattle() {
           profit:    iWon ? payout - myBet : -myBet,
           won:       iWon,
         });
-
-        setUserHistory(prev => prev.map(h =>
-          h.roundNumber === data.roundNumber
-            ? { ...h, won: iWon, payout: iWon ? payout : 0 }
-            : h
-        ));
 
         if (iWon) {
           addNotification("game_win", "🎉 Spin Battle Won!",
@@ -306,16 +302,6 @@ export default function SpinBattle() {
       }
 
       refreshWalletsFromBackend().catch(() => {});
-
-      if (lobbyState) {
-        setUserHistory(prev => [{
-          roundNumber: lobbyState.roundNumber,
-          betAmount:   bet,
-          won:         null,
-          payout:      0,
-          timestamp:   Date.now(),
-        }, ...prev]);
-      }
 
       toast.success(`Joined Round #${lobbyState?.roundNumber ?? "—"} with ${formatCurrencyNoDecimals(bet)}!`);
     } catch {
