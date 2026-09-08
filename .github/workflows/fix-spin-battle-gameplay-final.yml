@@ -32,7 +32,6 @@ jobs:
               t=t.replace('  recentWinners: BackendWinner[];\n', '  recentWinners: BackendWinner[];\n  history?: Array<{ roundNumber:number; lobbyId:string|null; betAmount:number; won:boolean|null; payout:number; timestamp:number }>;\n', 1)
           if 'if (Array.isArray(data.history)) setUserHistory(data.history);' not in t:
               t=t.replace('    setLobbyState(data);', '    setLobbyState(data);\n    if (Array.isArray(data.history)) setUserHistory(data.history);', 1)
-          # Stop client-side history from becoming the source of truth.
           t=re.sub(r'\n\s*setUserHistory\(prev => prev\.map\(h =>\n\s*h\.roundNumber === data\.roundNumber\n\s*\? \{ \.\.\.h, won: iWon, payout: iWon \? payout : 0 \}\n\s*: h\n\s*\)\);', '', t, count=1)
           t=re.sub(r'\n\s*if \(lobbyState\) \{\n\s*setUserHistory\(prev => \[\{.*?\}, \.\.\.prev\]\);\n\s*\}', '', t, count=1, flags=re.S)
           t=re.sub(r'\n\s*// Save user history to localStorage\n\s*useEffect\(\(\) => \{.*?\n\s*\}, \[userHistory, selectedLobby\]\);', '', t, count=1, flags=re.S)
@@ -40,7 +39,7 @@ jobs:
           PY
       - name: Build frontend
         run: |
-          npm ci
+          npm install
           npm run build
       - name: Remove temporary workflow and commit
         run: |
