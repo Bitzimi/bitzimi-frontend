@@ -1,0 +1,40 @@
+name: Restore Spin Battle Gameplay UI
+on:
+  push:
+    paths:
+      - .github/workflows/restore-spin-battle-gameplay.yml
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch Spin Battle page
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/app/pages/SpinBattle.tsx')
+          s = p.read_text()
+          if 'SpinBattleGameplay' not in s:
+              s = s.replace('import { fairnessService, type FairnessData } from "../services/gameMatchmakingService";','import { fairnessService, type FairnessData } from "../services/gameMatchmakingService";\nimport SpinBattleGameplay from "../components/SpinBattleGameplay";')
+          s = s.replace('''interface BackendPlayer {\n  userId:   string;\n  username: string;\n  index:    number;\n}''','''interface BackendPlayer {\n  userId: string;\n  username: string;\n  index: number;\n  avatar?: string | null;\n  betAmount: number;\n  color: string;\n  segmentStart: number;\n  segmentEnd: number;\n  probability: number;\n}''')
+          s = s.replace('''interface BackendWinner {\n  roundNumber:    number;\n  winnerId:       string | null;\n  winnerUsername: string | null;\n  winnerPayout:   number;\n  timestamp:      string;\n}''','''interface BackendWinner {\n  roundNumber: number;\n  winnerId: string | null;\n  winnerUsername: string | null;\n  winnerPayout: number;\n  timestamp: string;\n  avatar?: string | null;\n}''')
+          s = s.replace('''  recentWinners:  BackendWinner[];\n}''','''  recentWinners: BackendWinner[];\n  verificationId?: string | null;\n  serverSeedHash?: string | null;\n}''')
+          start = s.index('  const lobbyRange    = selectedLobby ? LOBBY_RANGES[selectedLobby] : null;')
+          end = s.rfind('\n}')
+          replacement = '''  return (\n    <ResponsiveLayout>\n      <SpinBattleGameplay\n        lobbyState={lobbyState}\n        selectedLobby={selectedLobby}\n        betAmount={betAmount}\n        setBetAmount={setBetAmount}\n        joining={joining}\n        onJoin={handleJoin}\n        onBack={() => setSelectedLobby(null)}\n        balances={balances}\n        identity={identity}\n        userHistory={userHistory}\n      />\n    </ResponsiveLayout>\n  );'''
+          s = s[:start] + replacement + s[end:]
+          p.write_text(s)
+      - name: Commit and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/SpinBattle.tsx
+          git commit -m "Restore original Spin Battle gameplay presentation" || true
+          git push
+          rm -f .github/workflows/restore-spin-battle-gameplay.yml
+          git add -u .github/workflows/restore-spin-battle-gameplay.yml
+          git commit -m "Remove temporary Spin Battle UI workflow" || true
+          git push
