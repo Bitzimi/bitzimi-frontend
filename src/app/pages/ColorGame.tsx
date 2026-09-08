@@ -442,7 +442,7 @@ export default function ColorGame() {
         <CardContent>
           {activeTab === "your" ? (
             betHistory.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {betHistory.map((bet: any) => (
                   <div key={bet.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
