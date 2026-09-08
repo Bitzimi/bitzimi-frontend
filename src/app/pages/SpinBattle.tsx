@@ -30,23 +30,31 @@ import { PlayerAvatar } from "../components/PlayerAvatar";
 import { Button } from "../components/ui/button";
 import { FairnessModal } from "../components/FairnessModal";
 import { fairnessService, type FairnessData } from "../services/gameMatchmakingService";
+import SpinBattleGameplay from "../components/SpinBattleGameplay";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type BackendPhase = "waiting" | "countdown" | "locked" | "spinning" | "result" | "completed";
 
 interface BackendPlayer {
-  userId:   string;
+  userId: string;
   username: string;
-  index:    number;
+  index: number;
+  avatar?: string | null;
+  betAmount: number;
+  color: string;
+  segmentStart: number;
+  segmentEnd: number;
+  probability: number;
 }
 
 interface BackendWinner {
-  roundNumber:    number;
-  winnerId:       string | null;
+  roundNumber: number;
+  winnerId: string | null;
   winnerUsername: string | null;
-  winnerPayout:   number;
-  timestamp:      string;
+  winnerPayout: number;
+  timestamp: string;
+  avatar?: string | null;
 }
 
 interface LobbyState {
@@ -66,7 +74,9 @@ interface LobbyState {
   canJoin:        boolean;
   players:        BackendPlayer[];
   myBet:          { inRound: boolean; amount: number | null } | null;
-  recentWinners:  BackendWinner[];
+  recentWinners: BackendWinner[];
+  verificationId?: string | null;
+  serverSeedHash?: string | null;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -509,355 +519,20 @@ export default function SpinBattle() {
     );
   }
 
-  const lobbyRange    = selectedLobby ? LOBBY_RANGES[selectedLobby] : null;
-  const minBet        = lobbyState.minBet ?? lobbyRange?.min ?? 1;
-  const maxBet        = lobbyState.maxBet ?? lobbyRange?.max ?? 500;
-  const parsedBet     = parseFloat(betAmount) || minBet;
-  const inRound       = lobbyState.myBet?.inRound ?? false;
-  const myBetDisplay  = lobbyState.myBet?.amount ?? null;
-  const bettingOpen   = lobbyState.canJoin && !inRound;
-  const bettingLocked = !lobbyState.canJoin;
-  const potentialWin  = Math.floor(lobbyState.totalPool * 0.9) || Math.floor(parsedBet * 2 * 0.9);
-
   return (
     <ResponsiveLayout>
-      <div className="max-w-7xl mx-auto space-y-6 pb-8">
-        {/* Header */}
-        <div className="space-y-3">
-          <div className="flex items-center">
-            <Button variant="ghost" size="sm" onClick={() => setSelectedLobby(null)}
-              className="hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors px-3 -ml-3">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              <span className="text-sm font-medium">Back to Lobby</span>
-            </Button>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-baseline gap-[6px]">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Spin Battle</h1>
-              <span className="text-sm text-gray-500 whitespace-nowrap">- Lobby {selectedLobby}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
-              <Button variant="outline" size="sm" onClick={() => setShowRules(true)}
-                className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 px-4 rounded-lg shrink-0">
-                <Info className="h-4 w-4 mr-2" />Rules
-              </Button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-gray-500">Round #{lobbyState.roundNumber}</p>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10">
-              <div className="relative">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
-                <div className="absolute inset-0 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping opacity-75" />
-              </div>
-              <span className="text-xs font-semibold text-red-500">Live</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Main grid */}
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Wheel column */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Stats bar */}
-            <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/50 text-sm flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 dark:text-gray-400">Range</span>
-                <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{formatCurrencyNoDecimals(minBet)}–{formatCurrencyNoDecimals(maxBet)}</span>
-              </div>
-              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 shrink-0" />
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 dark:text-gray-400">Pool</span>
-                <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{formatCurrencyNoDecimals(lobbyState.totalPool)}</span>
-              </div>
-              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 shrink-0" />
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 dark:text-gray-400">Players</span>
-                <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{lobbyState.playerCount}</span>
-              </div>
-              <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 shrink-0" />
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 dark:text-gray-400">Winner Gets</span>
-                <span className="font-semibold text-gray-900 dark:text-white tabular-nums">
-                  {formatCurrencyNoDecimals(lobbyState.winnerPayout ?? potentialWin)}
-                </span>
-              </div>
-            </div>
-
-            {/* Wheel card */}
-            <Card className="bg-white dark:bg-gradient-to-br dark:from-gray-900/90 dark:to-gray-800/90 border-gray-200 dark:border-gray-700/50 shadow-2xl">
-              <CardContent className="p-8 space-y-4">
-                {renderWheel()}
-                {bettingLocked && lobbyState.phase !== "result" && (
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-red-500 animate-pulse">⛔ NO MORE BETS ⛔</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Controls & sidebar */}
-          <div className="space-y-6">
-            {/* Join / already in */}
-            <Card className="bg-white dark:bg-gradient-to-br dark:from-gray-900/90 dark:to-gray-800/90 border-gray-200 dark:border-gray-700/50">
-              <CardContent className="p-6 space-y-4">
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    Lobby {selectedLobby} Bet Range
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrencyNoDecimals(minBet)} – {formatCurrencyNoDecimals(maxBet)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Game Wallet: {formatCurrencyNoDecimals(balances.game)}
-                  </p>
-                </div>
-
-                {/* Bet amount input — only when betting open and not yet in round */}
-                {bettingOpen && !inRound && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-center text-gray-500 dark:text-gray-400">Your bet amount</p>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">$</span>
-                      <input
-                        type="number" min={minBet} max={maxBet} step="1"
-                        value={betAmount}
-                        onChange={e => setBetAmount(e.target.value)}
-                        placeholder={String(minBet)}
-                        className="w-full h-11 pl-7 pr-3 text-base font-mono tabular-nums rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                      />
-                    </div>
-                    <div className="flex gap-1.5">
-                      {[minBet, Math.round((minBet + maxBet) / 2), maxBet].map(p => (
-                        <button key={p} onClick={() => setBetAmount(String(p))}
-                          className="flex-1 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium transition-colors">
-                          ${p}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Show my current bet if already in round */}
-                {inRound && myBetDisplay !== null && (
-                  <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-                    Your bet: <span className="font-semibold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(myBetDisplay)}</span>
-                  </p>
-                )}
-
-                <Button
-                  className={`w-full h-14 text-white font-bold text-lg shadow-lg disabled:opacity-50 ${
-                    inRound
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                  }`}
-                  onClick={handleJoin}
-                  disabled={inRound || bettingLocked || joining || balances.game < parsedBet}
-                >
-                  {joining ? (
-                    <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Joining...</>
-                  ) : inRound ? (
-                    "✓ In This Round"
-                  ) : bettingLocked ? (
-                    "Betting Closed"
-                  ) : (
-                    `Join for ${formatCurrencyNoDecimals(parsedBet)}`
-                  )}
-                </Button>
-
-                {bettingLocked && !inRound && (
-                  <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-                    {lobbyState.phase === "result" ? "Next round starting soon..." : "Join the next round!"}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Players */}
-            <Card className="bg-white dark:bg-gradient-to-br dark:from-gray-900/90 dark:to-gray-800/90 border-gray-200 dark:border-gray-700/50">
-              <CardContent className="p-6">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-                  Players ({lobbyState.playerCount}/{lobbyState.maxPlayers})
-                </h3>
-                <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
-                  {lobbyState.players.length === 0 ? (
-                    <p className="text-sm text-gray-600 dark:text-gray-500 text-center py-6">No players yet</p>
-                  ) : (
-                    lobbyState.players.map((player, i) => {
-                      const color    = PLAYER_COLORS[i % PLAYER_COLORS.length];
-                      const isWinner = lobbyState.winnerId === player.userId && lobbyState.phase === "result";
-                      const isMe     = player.userId === identity.userId;
-                      return (
-                        <div key={player.userId}
-                          className={`flex items-center justify-between p-3 rounded-lg transition-colors ${isWinner ? "bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700" : "bg-gray-50 dark:bg-gray-800/30"}`}>
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full shadow-lg" style={{ backgroundColor: color }} />
-                            <div className="w-10 h-10 rounded-full border-2 flex items-center justify-center text-xl overflow-hidden" style={{ borderColor: color }}>
-                              <PlayerAvatar avatar={isMe ? identity.avatar : player.username.charAt(0).toUpperCase()} />
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                {player.username}{isMe ? " (you)" : ""}
-                              </p>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">
-                                {lobbyState.playerCount > 0 ? `${(100 / lobbyState.playerCount).toFixed(1)}% chance` : "0%"}
-                              </p>
-                            </div>
-                          </div>
-                          {isWinner && <Trophy className="h-5 w-5 text-yellow-500" />}
-                          <div className="text-right shrink-0">
-                  {isMe && lobbyState.myBet?.amount != null ? (
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(lobbyState.myBet.amount)}</p>
-                  ) : (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">In round</p>
-                  )}
-                </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Tabs */}
-            <Card className="bg-white dark:bg-gradient-to-br dark:from-gray-900/90 dark:to-gray-800/90 border-gray-200 dark:border-gray-700/50">
-              <CardContent className="p-6">
-                <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 mb-4">
-                  {(["winners","history"] as const).map(tab => (
-                    <button key={tab} onClick={() => setActiveTab(tab)}
-                      className={`pb-3 px-1 text-sm font-semibold transition-colors ${activeTab === tab ? "text-gray-900 dark:text-white border-b-2 border-blue-500" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}>
-                      {tab === "winners" ? "Recent Winners" : "Your History"}
-                    </button>
-                  ))}
-                </div>
-                <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2">
-                  {activeTab === "winners" && (
-                    lobbyState.recentWinners.length === 0 ? (
-                      <p className="text-sm text-gray-600 dark:text-gray-500 text-center py-6">No winners yet</p>
-                    ) : (
-                      lobbyState.recentWinners.map((w, idx) => (
-                        <div key={`${w.roundNumber}-${idx}`} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/30">
-                          <div className="w-10 h-10 rounded-full border-2 border-yellow-500/50 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 flex items-center justify-center text-lg overflow-hidden">
-                            <PlayerAvatar avatar={(w.winnerUsername ?? "?").charAt(0).toUpperCase()} />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-xs text-gray-600 dark:text-gray-400">Round #{w.roundNumber}</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{w.winnerUsername ?? "Unknown"}</p>
-                          </div>
-                          <p className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{formatCurrencyNoDecimals(w.winnerPayout)}</p>
-                        </div>
-                      ))
-                    )
-                  )}
-                  {activeTab === "history" && (
-                    userHistory.length === 0 ? (
-                      <p className="text-sm text-gray-600 dark:text-gray-500 text-center py-6">No bets placed yet</p>
-                    ) : (
-                      userHistory.map((record, i) => {
-                        const isPending = record.won === null;
-                        return (
-                          <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/30">
-                            <div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400">Round #{record.roundNumber}</p>
-                              <p className="text-sm text-gray-900 dark:text-white">Bet: {formatCurrencyNoDecimals(record.betAmount)}</p>
-                            </div>
-                            <div className="text-right">
-                              {isPending ? (
-                                <p className="text-xs font-bold text-blue-500 dark:text-blue-400">PENDING</p>
-                              ) : (
-                                <>
-                                  <p className={`text-xs font-bold mb-1 ${record.won ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
-                                    {record.won ? "WIN" : "LOSS"}
-                                  </p>
-                                  {record.won && <p className="text-sm font-bold text-green-500 dark:text-green-400">+{formatCurrencyNoDecimals(record.payout)}</p>}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-      {/* Rules modal */}
-      {showRules && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowRules(false)}>
-          <Card className="max-w-lg w-full max-h-[70vh] overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700" onClick={e => e.stopPropagation()}>
-            <CardContent className="p-6 sm:p-10 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl sm:text-3xl font-bold text-gray-900 dark:text-white">How to Play</h2>
-                <Button variant="ghost" size="sm" onClick={() => setShowRules(false)} className="text-2xl">×</Button>
-              </div>
-              <div className="space-y-3 text-sm text-gray-700 dark:text-gray-300">
-                {[
-                  ["Join the Round", "Click Join to pay the fixed lobby stake from your Game Wallet."],
-                  ["Game Runs 24/7",  "The server runs rounds continuously. Join anytime during waiting or countdown."],
-                  ["Equal Chance",    "Every player has exactly 1/N probability of winning (where N = number of players)."],
-                  ["Winner Selection","The server uses cryptographically secure randomness — not the wheel animation."],
-                  ["Payout",         "Winner receives the entire pool minus 10% platform fee."],
-                ].map(([title, body], i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-500 font-bold text-xs">{i+1}</div>
-                    <div><p className="font-semibold text-gray-900 dark:text-white mb-1">{title}</p><p>{body}</p></div>
-                  </div>
-                ))}
-              </div>
-              <Button className="w-full" onClick={() => setShowRules(false)}>Got it!</Button>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Fairness Modal */}
-      <FairnessModal
-        isOpen={showFairness}
-        onClose={() => setShowFairness(false)}
-        gameType="spin_battle"
-        roundNumber={lobbyState.roundNumber}
-        serverSeedHash={fairnessData?.serverSeedHash ?? (lobbyState as any).serverSeedHash ?? ""}
-        serverSeed={fairnessData?.serverSeed ?? null}
-        clientSeed={fairnessData?.clientSeed ?? null}
-        nonce={fairnessData?.nonce ?? null}
-        result={lobbyState.winnerId ? { winnerId: lobbyState.winnerId, winnerUsername: lobbyState.winnerUsername } : undefined}
+      <SpinBattleGameplay
+        lobbyState={lobbyState}
+        selectedLobby={selectedLobby}
+        betAmount={betAmount}
+        setBetAmount={setBetAmount}
+        joining={joining}
+        onJoin={handleJoin}
+        onBack={() => setSelectedLobby(null)}
+        balances={balances}
+        identity={identity}
+        userHistory={userHistory}
       />
-
-      {/* Winner popup */}
-      {showResultPopup && lobbyState.phase === "result" && lobbyState.winnerUsername && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-in fade-in duration-500">
-          <Card className="w-full max-w-[360px] sm:max-w-xl bg-gradient-to-br from-yellow-900/90 via-orange-900/90 to-red-900/90 border-yellow-500/50 shadow-2xl animate-in zoom-in-95 duration-500">
-            <CardContent className="p-6 sm:p-12">
-              <div className="text-center space-y-4 sm:space-y-8">
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-yellow-400 rounded-full blur-xl opacity-50 animate-pulse" />
-                    <Trophy className="relative h-12 w-12 sm:h-24 sm:w-24 text-yellow-400 animate-bounce" />
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs sm:text-lg text-yellow-300 font-semibold mb-2">Round #{lobbyState.roundNumber} Winner</p>
-                  <p className="text-3xl sm:text-6xl font-bold text-white mb-2">{lobbyState.winnerUsername}</p>
-                </div>
-                <div className="bg-black/30 rounded-lg p-4 sm:p-10 border border-yellow-500/30">
-                  <p className="text-xs sm:text-lg text-gray-300 mb-2">Prize Won</p>
-                  <p className="text-2xl sm:text-6xl font-bold text-yellow-400">{formatCurrencyNoDecimals(lobbyState.winnerPayout ?? 0)}</p>
-                </div>
-                <Button onClick={() => setShowResultPopup(false)} variant="outline"
-                  className="border-yellow-500/50 text-yellow-300 hover:bg-yellow-900/30">Close</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </ResponsiveLayout>
   );
 }
