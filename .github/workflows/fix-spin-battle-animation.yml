@@ -1,0 +1,33 @@
+name: Fix Spin Battle Animation
+on:
+  push:
+    paths:
+      - .github/workflows/fix-spin-battle-animation.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch animation timing
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/app/components/SpinBattleGameplay.tsx')
+          s=p.read_text()
+          s=s.replace('transition:animating?"transform 5s cubic-bezier(0.17,0.67,0.12,0.99)":"none"', 'transition:lobbyState.phase==="result"?"transform 1.2s cubic-bezier(0.17,0.67,0.12,0.99)":animating?"transform 5s cubic-bezier(0.17,0.67,0.12,0.99)":"none"')
+          s=s.replace('const a=window.setTimeout(()=>setAnimating(false),5000),b=window.setTimeout(()=>setPresentation("popup"),9000)', 'const a=window.setTimeout(()=>setAnimating(false),1200),b=window.setTimeout(()=>setPresentation("popup"),5200)')
+          p.write_text(s)
+      - name: Commit and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/components/SpinBattleGameplay.tsx
+          git commit -m "Align Spin Battle wheel animation timing" || true
+          git push
+          rm -f .github/workflows/fix-spin-battle-animation.yml
+          git add -u .github/workflows/fix-spin-battle-animation.yml
+          git commit -m "Remove temporary Spin Battle animation workflow" || true
+          git push
