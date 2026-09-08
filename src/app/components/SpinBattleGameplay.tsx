@@ -33,7 +33,7 @@ export default function SpinBattleGameplay({lobbyState,selectedLobby,betAmount,s
 
  useEffect(()=>{if(prevRound.current!==null&&prevRound.current!==lobbyState.roundNumber){setRotation(0);setPresentation("normal");setAnimating(false);setUnderPointer(null);}prevRound.current=lobbyState.roundNumber;},[lobbyState.roundNumber]);
  useEffect(()=>{const prev=prevPhase.current;prevPhase.current=lobbyState.phase;if(popupTimer.current)clearTimeout(popupTimer.current);if(winnerTimer.current)clearTimeout(winnerTimer.current);
-   if(lobbyState.phase==="spinning"&&prev!=="spinning"){setPresentation("spinning");setAnimating(true);requestAnimationFrame(()=>setRotation(r=>r+7*360+270));}
+   if(lobbyState.phase==="spinning"&&prev!=="spinning"){setPresentation("spinning");setAnimating(true);requestAnimationFrame(()=>setRotation(r=>r+5*360+270));}
    if(lobbyState.phase==="result"&&prev!=="result"&&winner){setPresentation("winner");setAnimating(true);const center=(winner.segmentStart+winner.segmentEnd)/2;requestAnimationFrame(()=>setRotation(current=>{const currentMod=((current%360)+360)%360;const desired=(360-center+360)%360;const delta=((desired-currentMod)+360)%360;return current+360+delta;}));popupTimer.current=setTimeout(()=>setPresentation("popup"),4000);winnerTimer.current=setTimeout(()=>setAnimating(false),1200);loadHistory();}
    if(lobbyState.phase==="waiting"&&prev==="result")setPresentation("normal");
    return()=>{if(popupTimer.current)clearTimeout(popupTimer.current);if(winnerTimer.current)clearTimeout(winnerTimer.current);};
