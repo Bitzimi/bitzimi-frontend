@@ -71,11 +71,11 @@ export default function SpinBattle(){
  };
  const leaveLobby=()=>{if(pollRef.current)clearInterval(pollRef.current);setLobbyState(null);setConnectionError(false);setSelectedLobby(null);setSearchParams({});};
 
- // Selector data. Keep this lightweight and never allow a slow request to block navigation.
+ // Selector data. Keep this lightweight and allow enough time for a sleeping Render service to wake.
  useEffect(()=>{
    if(!API_BASE||!getToken()||selectedLobby)return;
    let cancelled=false;
-   const poll=async()=>{try{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),6000);const res=await fetch(`${API_BASE}/api/v1/games/spin/lobbies`,{headers:{Authorization:`Bearer ${getToken()}`},signal:controller.signal});clearTimeout(timer);if(!cancelled&&res.ok){const json=await res.json();setAllLobbies(json.data??{});}}catch{} };
+   const poll=async()=>{try{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),65000);const res=await fetch(`${API_BASE}/api/v1/games/spin/lobbies`,{headers:{Authorization:`Bearer ${getToken()}`},signal:controller.signal});clearTimeout(timer);if(!cancelled&&res.ok){const json=await res.json();setAllLobbies(json.data??{});}}catch{} };
    poll();lobbiesPollRef.current=setInterval(poll,3000);return()=>{cancelled=true;if(lobbiesPollRef.current)clearInterval(lobbiesPollRef.current);};
  },[selectedLobby]);
 
@@ -105,7 +105,9 @@ export default function SpinBattle(){
    if(!selectedLobby||!API_BASE||!getToken()||inFlight.current)return;
    inFlight.current=true;
    try{
-     const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),7000);
+     // Render Free services can sleep for 15 minutes and take about a minute to wake.
+     // Keep this request alive long enough for the cold-start response instead of showing a false connection error.
+     const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),65000);
      const res=await fetch(`${API_BASE}/api/v1/games/spin/lobbies/${selectedLobby}`,{headers:{Authorization:`Bearer ${getToken()}`},signal:controller.signal});
      clearTimeout(timer);
      if(!res.ok){if(mounted.current&&!lobbyState)setConnectionError(true);return;}
