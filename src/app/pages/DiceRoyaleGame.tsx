@@ -81,11 +81,12 @@ export default function DiceRoyaleGame() {
   const stopAddingPlayers = useRef(false);
 
   // Platform fee and payout calculations (DYNAMIC based on current players)
-  const PLATFORM_FEE_PERCENT = 0.1;
+  const [feeRate, setFeeRate] = useState(0);
+  useEffect(() => { gameMatchmakingService.getGameConfig("dice_royale").then(c => setFeeRate(Number(c.feeRate) || 0)).catch(() => {}); }, []);
   const maxPlayers = 6; // Always show /6
 
   const totalPool = stake * players.length; // Dynamic based on actual players
-  const platformFee = totalPool * PLATFORM_FEE_PERCENT;
+  const platformFee = totalPool * feeRate;
   const winnerPayout = totalPool - platformFee;
 
   // Polling ref for round state updates
@@ -273,41 +274,29 @@ export default function DiceRoyaleGame() {
             </Button>
           </div>
 
-          {/* [Title Row] - Title + LIVE indicator + Rules Button */}
-          <div className="flex items-center justify-between gap-4">
-            {/* Left: Title + LIVE + Round */}
-            <div className="space-y-1">
+          {/* [Title Row] - Spin Battle-style two-row header */
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+            <div className="min-w-0 flex items-center gap-[6px]">
               <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Dice Royale</h1>
-              <div className="flex items-center gap-2">
-                {/* LIVE indicator — same as Spin Battle */}
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-red-500/10">
-                  <div className="relative">
-                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
-                    <div className="absolute inset-0 w-1.5 h-1.5 bg-red-500 rounded-full animate-ping opacity-75" />
-                  </div>
-                  <span className="text-xs font-semibold text-red-500">LIVE</span>
-                </div>
-                {/* Round number comes from backend via startPolling */}
-                <span className="text-xs text-gray-500 dark:text-gray-400">Round #{roundNumber}</span>
-              </div>
+              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(initialStake)}</span>
             </div>
-
-            {/* Right: Fairness + Rules Buttons */}
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowRules(!showRules)}
-                className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
-              >
-                <Info className="h-4 w-4 mr-2" />
-                Rules
-              </Button>
+            <div className="flex items-center justify-end"><Button
+  variant="outline"
+  size="sm"
+  onClick={() => setShowRules(!showRules)}
+  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
+>
+  <Info className="h-4 w-4 mr-2" />
+  Rules
+</Button></div>
+            <div className="min-w-0 flex items-center gap-2">
+              <span className="text-sm text-gray-500 whitespace-nowrap">Round #{roundNumber}</span>
+              <span className="inline-flex items-center gap-1 text-xs text-green-500 font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />LIVE</span>
             </div>
+            <div className="flex items-center justify-end"><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button></div>
           </div>
 
-          {/* Game Rules Panel */}
+/* Game Rules Panel */}
           {showRules && (
             <Card className="border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
               <CardContent className="p-4">

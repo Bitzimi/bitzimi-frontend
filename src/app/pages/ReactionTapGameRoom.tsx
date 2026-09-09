@@ -39,6 +39,7 @@ import { gameMatchmakingService, type MatchResult } from "../services/gameMatchm
 
 // ── Game state machine ─────────────────────────────────────────────────────────
 type GameState =
+  | "idle"
   | "searching"       // in matchmaking queue
   | "matched"         // opponent found, about to signal ready
   | "signaling"       // called signalReady(), waiting for opponent to be ready too
@@ -60,12 +61,13 @@ export default function ReactionTapGameRoom() {
   // refreshWalletsFromBackend() is called after settlement.
   const { balances, refreshWalletsFromBackend } = useWallet();
   const { addGameResult }  = useGameStats();
-  const { addNotification } = useNotifications();
   const { identity } = useIdentity();
+
+  useEffect(() => { gameMatchmakingService.getGameConfig("reaction_tap").catch(() => {}); }, []);
   const myUsername   = identity.username;
 
   // ── Core game state ──────────────────────────────────────────────────────────
-  const [gameState,        setGameState]        = useState<GameState>("searching");
+  const [gameState,        setGameState]        = useState<GameState>("idle");
   const [opponentName,     setOpponentName]     = useState("");
   const [opponentAvatar,   setOpponentAvatar]   = useState("P");
   const [queueId,          setQueueId]          = useState<string | null>(null);
@@ -159,7 +161,7 @@ export default function ReactionTapGameRoom() {
         startSignalingPhase(sid, mid);
       }
     }, 1000);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gameState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Phase: call signalReady(), poll until signalSentAt is set ─────────────────
   const startSignalingPhase = useCallback(async (sid: string, mid: string) => {
@@ -276,17 +278,10 @@ export default function ReactionTapGameRoom() {
 
     // Notification + live activity
     if (voided) {
-      addNotification("system_alert", "Round Voided", "Both players tapped early. Stakes refunded.", { game: "reaction_tap" });
     } else if (won) {
-      addNotification("game_win", "🎉 Victory!",
-        `Reaction Tap: Won ${formatCurrencyNoDecimals(payout)} vs ${opponentAvatar} ${opponentName}`,
-        { game: "reaction_tap", stake: stakeAmount, payout, opponent: opponentName });
       liveActivityService.addActivity("game_win", myUsername, "won in Reaction Tap", payout);
       toast.success(`${myUsername} won ${formatCurrencyNoDecimals(payout)}!`);
     } else {
-      addNotification("game_loss", "You Lost",
-        `Reaction Tap: Lost ${formatCurrencyNoDecimals(stakeAmount)} vs ${opponentAvatar} ${opponentName}`,
-        { game: "reaction_tap", stake: stakeAmount, opponent: opponentName });
       toast.error(`${myUsername} lost this round`);
     }
 
@@ -353,17 +348,9 @@ export default function ReactionTapGameRoom() {
   }, [stakeAmount, navigate, startCountdown, privateMatchId]);
 
   // ── Mount: balance check + enter queue ────────────────────────────────────────
-  useEffect(() => {
-    if (balances.game < stakeAmount) {
-      toast.error("Insufficient balance in Game Wallet");
-      navigate("/game/reaction-tap");
-      return;
-    }
-    // Backend deducts stakes when match is created — no local decrementBalance
-    const sid = sessionId.current;
-    enterQueue(sid);
-    return () => stopAllTimers();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const startSearch = () => { if (gameState !== "ready") return; enterQueue(sessionId.current); };
+
+  useEffect(() => { if (privateMatchId) enterQueue(sessionId.current); return () => stopAllTimers(); }, [privateMatchId]);
 
   // ── Handle tap ─────────────────────────────────────────────────────────────────
   const handleTap = useCallback(async () => {
@@ -419,29 +406,26 @@ export default function ReactionTapGameRoom() {
   return (
     <ResponsiveLayout>
       <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
-        {/* Header */}
+        {/* Header - Spin Battle-style two-row layout; Reaction Tap has no fairness control */}
         <div className="mb-4 sm:mb-6">
           <Button variant="ghost" size="sm" onClick={handleExit}
             className="mb-3 sm:mb-4 -ml-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
             <ArrowLeft className="h-4 w-4 mr-2" />Exit Room
           </Button>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl">
-                <Zap className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">Reaction Arena</h1>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
-                  {formatCurrencyNoDecimals(stakeAmount)} Stake • First to tap wins
-                </p>
-              </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+            <div className="min-w-0 flex items-center gap-[6px]">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Tap</h1>
+              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
             </div>
-
+            <div className="flex items-center justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowRules(v => !v)} className="shrink-0">
+                <Info className="h-4 w-4 mr-2" />Rules
+              </Button>
+            </div>
+            <div className="min-w-0 flex items-center gap-[6px]">
+              <span className="text-sm text-gray-500 whitespace-nowrap">Reaction Tap - Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+            </div>
           </div>
-            <Button variant="outline" size="sm" onClick={() => setShowRules(v => !v)} className="shrink-0">
-              <Info className="h-4 w-4 mr-2" />Rules
-            </Button>
         </div>
         {showRules && (
           <Card className="mt-3 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
@@ -486,7 +470,15 @@ export default function ReactionTapGameRoom() {
             </Card>
 
             {/* Searching */}
-            {gameState === "searching" && (
+            {gameState === "idle" && (
+              <div className="text-center"><Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button></div>
+            )}
+
+            {gameState === "ready" && (
+            <div className="text-center py-8"><Button onClick={startSearch} className="px-8 py-3">Search for Opponent</Button><div className="text-xs text-gray-500 mt-3">Your stake is deducted when you start searching.</div></div>
+          )}
+
+          {gameState === "searching" && (
               <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-800">
                 <div className="relative p-12 sm:p-16 text-center">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />

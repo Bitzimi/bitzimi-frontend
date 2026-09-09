@@ -4,8 +4,9 @@ async function apiFetch<T>(path:string,options?:RequestInit):Promise<T>{const re
 
 export type MatchGameType="dice_clash"|"pvp_coinflip"|"reaction_tap";
 export interface QueueResult{status:"waiting"|"matched"|"cancelled";queueId?:string;matchId?:string;}
+export interface GameConfig{gameType:string;feeRate:number;feePercent:number;stakes:number[];}
 export interface PrivateRoom{id:string;code:string;gameType:string;stake:number;hostId:string;guestId:string|null;status:"waiting"|"ready"|"active"|"rematch"|"completed"|"cancelled";currentMatchId:string|null;rematchHostReady:boolean;rematchGuestReady:boolean;createdAt:string;expiresAt:string;host:{id:string;profile:{username:string;avatarUrl:string|null}|null};guest:{id:string;profile:{username:string;avatarUrl:string|null}|null}|null;}
-export interface MatchResult{matchId:string;gameType:string;stake:number;totalPool:number;platformFee:number;status:"active"|"settled"|"cancelled";opponent:{username:string;userId:string};result:Record<string,any>|null;winnerId:string|null;youWon:boolean;payout:number;createdAt:string;settledAt:string|null;signalSentAt:string|null;yourReady:boolean;opponentReady:boolean;}
+export interface MatchResult{matchId:string;gameType:string;stake:number;totalPool:number;platformFee:number;status:"active"|"settled"|"cancelled";opponent:{username:string;userId:string;avatar?:string|null};result:Record<string,any>|null;winnerId:string|null;youWon:boolean;payout:number;createdAt:string;settledAt:string|null;signalSentAt:string|null;yourReady:boolean;opponentReady:boolean;}
 
 let lastQueueContext:{gameType:MatchGameType;stake:number;queueId:string}|null=null;
 // The game pages keep polling the original queue id. If its lease expires, map
@@ -36,6 +37,7 @@ export const gameMatchmakingService={
  },
  async leaveQueue(queueId:string):Promise<void>{const effectiveQueueId=recoveredQueueIds.get(queueId)??queueId;await apiFetch(`/api/v1/games/queue/${effectiveQueueId}`,{method:"DELETE"});recoveredQueueIds.delete(queueId);if(lastQueueContext?.queueId===effectiveQueueId)lastQueueContext=null;},
  async getMatch(matchId:string):Promise<MatchResult>{return apiFetch(`/api/v1/games/matches/${matchId}`);},
+ async getGameConfig(gameType:string):Promise<GameConfig>{return apiFetch(`/api/v1/games/config/${encodeURIComponent(gameType)}`);},
  async signalReady(matchId:string):Promise<{signalSentAt?:string;delayMs?:number;waiting?:boolean}>{return apiFetch(`/api/v1/games/matches/${matchId}/ready`,{method:"POST",body:"{}"});},
  async submitTap(matchId:string,tapMs:number):Promise<{submitted:boolean}>{return apiFetch(`/api/v1/games/matches/${matchId}/tap`,{method:"POST",body:JSON.stringify({tapMs})});},
  async createRoom(gameType:MatchGameType,stake:number):Promise<PrivateRoom>{return apiFetch("/api/v1/games/private-rooms",{method:"POST",body:JSON.stringify({gameType,stake})});},

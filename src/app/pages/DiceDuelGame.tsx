@@ -19,7 +19,7 @@ import { gameMatchmakingService, fairnessService, type FairnessData } from "../s
 import { FairnessModal } from "../components/FairnessModal";
 import { toast } from "sonner";
 
-type GameState = "searching" | "matched" | "rolling" | "showing_result" | "result_popup";
+type GameState = "ready" | "searching" | "matched" | "rolling" | "showing_result" | "result_popup";
 
 export default function DiceDuelGame() {
   const navigate = useNavigate();
@@ -31,11 +31,10 @@ export default function DiceDuelGame() {
   const { formatCurrencyNoDecimals } = useSettings();
   const { balances, refreshWalletsFromBackend } = useWallet();
   const { addGameResult } = useGameStats();
-  const { addNotification } = useNotifications();
   const { identity } = useIdentity();
   const myUsername = identity.username;
 
-  const [gameState, setGameState] = useState<GameState>("searching");
+  const [gameState, setGameState] = useState<GameState>("idle");
   const [opponentName, setOpponentName] = useState("");
   const [opponentAvatar, setOpponentAvatar] = useState("");
 
@@ -71,70 +70,19 @@ export default function DiceDuelGame() {
   const platformFee = Number(matchData?.platformFee ?? 0);
   const winnerPayout = Number(matchData?.payout ?? 0);
 
-  // Real-player matchmaking — no bots, no fake opponents
-  useEffect(() => {
-    if (gameState !== "searching") return;
-    let cancelled = false;
+  const startSearch = async () => {
+    if (gameState !== "ready") return;
+    if (balances.game < stake) { toast.error("Insufficient balance in Game Wallet"); return; }
+    setGameState("searching");
+    try {
+      if (privateMatchId) { const match = await gameMatchmakingService.getMatch(privateMatchId); setMatchId(privateMatchId); setMatchData(match); setOpponentName(match.opponent.username); setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase()); setGameState("matched"); return; }
+      const result = await gameMatchmakingService.joinQueue("dice_clash", stake);
+      if (result.status === "matched" && result.matchId) { const match = await gameMatchmakingService.getMatch(result.matchId); setMatchId(result.matchId); setMatchData(match); setOpponentName(match.opponent.username); setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase()); setGameState("matched"); return; }
+      if (result.queueId) { setQueueId(result.queueId); pollIntervalRef.current = setInterval(async () => { try { const status = await gameMatchmakingService.pollQueue(result.queueId); if (status.status === "matched" && status.matchId) { clearInterval(pollIntervalRef.current!); const match = await gameMatchmakingService.getMatch(status.matchId); setMatchId(status.matchId); setMatchData(match); setOpponentName(match.opponent.username); setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase()); setGameState("matched"); } else if (status.status === "cancelled") { clearInterval(pollIntervalRef.current!); setGameState("ready"); } } catch {} }, 500); }
+    } catch { setGameState("ready"); toast.error("Unable to start matchmaking"); }
+  };
 
-    const enterQueue = async () => {
-      try {
-        // Private match: skip queue, load pre-created match directly
-        if (privateMatchId) {
-          const match = await gameMatchmakingService.getMatch(privateMatchId);
-          if (cancelled) return;
-          setMatchId(privateMatchId);
-          setMatchData(match);
-          setOpponentName(match.opponent.username);
-          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-          setGameState("matched");
-          return;
-        }
-
-        const result = await gameMatchmakingService.joinQueue("dice_clash", stake);
-        if (cancelled) return;
-        if (result.status === "matched" && result.matchId) {
-          const match = await gameMatchmakingService.getMatch(result.matchId);
-          if (cancelled) return;
-          setMatchId(result.matchId);
-          setMatchData(match);
-          setOpponentName(match.opponent.username);
-          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-          setGameState("matched");
-          return;
-        }
-        if (result.queueId) {
-          setQueueId(result.queueId);
-          pollIntervalRef.current = setInterval(async () => {
-            if (cancelled) return;
-            try {
-              const status = await gameMatchmakingService.pollQueue(result.queueId!);
-              if (status.status === "matched" && status.matchId) {
-                clearInterval(pollIntervalRef.current!);
-                const match = await gameMatchmakingService.getMatch(status.matchId);
-                if (cancelled) return;
-                setMatchId(status.matchId);
-                setMatchData(match);
-                setOpponentName(match.opponent.username);
-                setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-                setGameState("matched");
-              } else if (status.status === "cancelled") {
-                clearInterval(pollIntervalRef.current!);
-                if (!cancelled) navigate("/dice-duel/clash");
-              }
-            } catch { /* keep polling */ }
-          }, 2000);
-        }
-      } catch {
-        if (!cancelled) navigate("/dice-duel/clash");
-      }
-    };
-
-    enterQueue();
-    return () => {
-      cancelled = true;
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [gameState]);
+  useEffect(() => { if (privateMatchId) startSearch(); return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }; }, [privateMatchId]);
 
   useEffect(() => {
     // Auto-start game after match found
@@ -180,14 +128,6 @@ export default function DiceDuelGame() {
           opponent: opponentName, result: won ? "win" : "loss",
           playerRoll, opponentRoll, stake, winnings: won ? winnerPayout : 0,
         });
-        addNotification(
-          won ? "game_win" : "game_loss",
-          won ? "🎉 Dice Clash Victory!" : "Dice Clash",
-          won
-            ? `Won ${formatCurrencyNoDecimals(winnerPayout - stake)} vs ${opponentAvatar} ${opponentName} (${playerRoll} vs ${opponentRoll})`
-            : `Lost ${formatCurrencyNoDecimals(stake)} vs ${opponentAvatar} ${opponentName} (${playerRoll} vs ${opponentRoll})`,
-          { game: "dice_clash", stake, payout: won ? winnerPayout : 0, opponent: opponentName }
-        );
         if (won) liveActivityService.addActivity("game_win", myUsername, `won in Dice Clash`, winnerPayout - stake);
       }
       setTimeout(() => { setShowResultPopup(true); }, 1500);
@@ -218,30 +158,26 @@ export default function DiceDuelGame() {
               </Button>
             </div>
 
-            {/* [Title Row] - Title + Stake Room + Rules Button (Same Line) */}
-            <div className="flex items-center justify-between gap-4">
-              {/* Left: Title + Stake Room */}
-              <div className="flex items-baseline gap-[6px]">
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Dice Clash</h1>
-                <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stake)}</span>
-              </div>
-
-              {/* Right: Fairness + Rules Buttons */}
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowRules(!showRules)}
-                  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
-                >
-                  <Info className="h-4 w-4 mr-2" />
-                  Rules
-                </Button>
-              </div>
+            {/* [Title Row] - Spin Battle-style two-row header */
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+            <div className="min-w-0 flex items-center gap-[6px]">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Dice Clash</h1>
+              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stake)}</span>
             </div>
+            <div className="flex items-center justify-end"><Button
+  variant="outline"
+  size="sm"
+  onClick={() => setShowRules(!showRules)}
+  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
+>
+  <Info className="h-4 w-4 mr-2" />
+  Rules
+</Button></div>
+            <div></div>
+            <div className="flex items-center justify-end"><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button></div>
+          </div>
 
-            {/* Game Rules Panel */}
+/* Game Rules Panel */}
             {showRules && (
               <Card className="border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                 <CardContent className="p-4">
@@ -319,6 +255,14 @@ export default function DiceDuelGame() {
           )}
 
           {/* Game States */}
+          {gameState === "idle" && (
+              <div className="text-center"><Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button></div>
+            )}
+
+            {gameState === "ready" && (
+            <div className="text-center py-8"><Button onClick={startSearch} className="px-8 py-3">Search for Opponent</Button><div className="text-xs text-gray-500 mt-3">Your stake is deducted when you start searching.</div></div>
+          )}
+
           {gameState === "searching" && (
             <div className="text-center py-12">
               <Loader2 className="w-10 h-10 animate-spin text-blue-500 mx-auto mb-4" />

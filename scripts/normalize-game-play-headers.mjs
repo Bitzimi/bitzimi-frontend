@@ -23,9 +23,7 @@ ${indent}    <h1 className="text-xl font-bold text-gray-900 dark:text-white whit
 ${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room \{formatCurrencyNoDecimals(${stake})\}</span>
 ${indent}  </div>
 ${indent}  <div className="flex items-center justify-end">${rules}</div>
-${indent}  <div className="min-w-0 flex items-center gap-[6px]">
-${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">${title} - Stake Room \{formatCurrencyNoDecimals(${stake})\}</span>
-${indent}  </div>
+${indent}  <div></div>
 ${indent}  <div className="flex items-center justify-end">${fairness}</div>
 ${indent}</div>
 

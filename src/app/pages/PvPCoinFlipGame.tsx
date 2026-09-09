@@ -24,21 +24,20 @@ import {
 } from "../components/ui/dialog";
 import { ProfessionalGoldCoin } from "../components/ProfessionalGoldCoin";
 
-type GameState = "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
+type GameState = "idle" | "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
 type CoinSide = "heads" | "tails";
 
 // Avatar is NOT stored in session history — resolved at render time from identity
 interface SessionRecord {
   id: string;
   opponent: string;
+  opponentAvatar?: string | null;
   result: "win" | "loss";
   outcome: CoinSide;
   amount: number;
   stake: number;
   timestamp: string;
 }
-
-const PLATFORM_FEE_PERCENT = 10; // 10% platform fee — display only; backend calculates the actual fee
 
 export default function PvPCoinFlipGame() {
   const navigate = useNavigate();
@@ -52,8 +51,9 @@ export default function PvPCoinFlipGame() {
   const { addNotification } = useNotifications();
   const { identity } = useIdentity();
   const myUsername = identity.username;
+  const [feeRate, setFeeRate] = useState<number>(0);
 
-  const [gameState, setGameState] = useState<GameState>("searching");
+  const [gameState, setGameState] = useState<GameState>("idle");
   const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
   const [isWinner, setIsWinner] = useState<boolean>(false);
   const [winAmount, setWinAmount] = useState<number>(0);
@@ -123,71 +123,47 @@ export default function PvPCoinFlipGame() {
     }
   }, [sessionHistory, stakeAmount]);
 
-  // Real-player matchmaking — enter queue, wait for real opponent
-  useEffect(() => {
-    if (hasStarted.current) return;
-    hasStarted.current = true;
-
-    if (balances.game < stakeAmount) {
-      toast.error("Insufficient balance in Game Wallet");
-      navigate("/game/pvp-coinflip");
-      return;
-    }
-
-    const enterQueue = async () => {
-      try {
-        // Private match: skip queue, load pre-created match directly
-        if (privateMatchId) {
-          const match = await gameMatchmakingService.getMatch(privateMatchId);
-          setMatchId(privateMatchId);
-          setMatchData(match);
-          setOpponentName(match.opponent.username);
-          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-          setGameState("matched");
-          setTimeout(() => assignSides(match), 3000);
-          return;
-        }
-
-        const result = await gameMatchmakingService.joinQueue("pvp_coinflip", stakeAmount);
-        if (result.status === "matched" && result.matchId) {
-          const match = await gameMatchmakingService.getMatch(result.matchId);
-          setMatchId(result.matchId);
-          setMatchData(match);
-          setOpponentName(match.opponent.username);
-          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-          setGameState("matched");
-          setTimeout(() => assignSides(match), 3000);
-          return;
-        }
-        if (result.queueId) {
-          setQueueId(result.queueId);
-          pollRef.current = setInterval(async () => {
-            try {
-              const status = await gameMatchmakingService.pollQueue(result.queueId!);
-              if (status.status === "matched" && status.matchId) {
-                clearInterval(pollRef.current!);
-                const match = await gameMatchmakingService.getMatch(status.matchId);
-                setMatchId(status.matchId);
-                setMatchData(match);
-                setOpponentName(match.opponent.username);
-                setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-                setGameState("matched");
-                setTimeout(() => assignSides(match), 3000);
-              } else if (status.status === "cancelled") {
-                clearInterval(pollRef.current!);
-                navigate("/game/pvp-coinflip");
-              }
-            } catch { /* keep polling */ }
-          }, 2000);
-        }
-      } catch {
-        navigate("/game/pvp-coinflip");
+  // Public matchmaking starts only after the user presses Search.
+  const startSearch = async () => {
+    if (gameState !== "ready") return;
+    if (balances.game < stakeAmount) { toast.error("Insufficient balance in Game Wallet"); return; }
+    setGameState("searching");
+    try {
+      if (privateMatchId) {
+        const match = await gameMatchmakingService.getMatch(privateMatchId);
+        setMatchId(privateMatchId); setMatchData(match); setOpponentName(match.opponent.username);
+        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase()); setGameState("matched");
+        setTimeout(() => assignSides(match), 3000); return;
       }
-    };
+      const result = await gameMatchmakingService.joinQueue("pvp_coinflip", stakeAmount);
+      if (result.status === "matched" && result.matchId) {
+        const match = await gameMatchmakingService.getMatch(result.matchId);
+        setMatchId(result.matchId); setMatchData(match); setOpponentName(match.opponent.username);
+        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase()); setGameState("matched");
+        setTimeout(() => assignSides(match), 3000); return;
+      }
+      if (result.queueId) {
+        setQueueId(result.queueId);
+        pollRef.current = setInterval(async () => {
+          try {
+            const status = await gameMatchmakingService.pollQueue(result.queueId);
+            if (status.status === "matched" && status.matchId) {
+              clearInterval(pollRef.current!);
+              const match = await gameMatchmakingService.getMatch(status.matchId);
+              setMatchId(status.matchId); setMatchData(match); setOpponentName(match.opponent.username);
+              setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase()); setGameState("matched");
+              setTimeout(() => assignSides(match), 3000);
+            } else if (status.status === "cancelled") { clearInterval(pollRef.current!); setGameState("ready"); }
+          } catch {}
+        }, 500);
+      }
+    } catch { setGameState("ready"); toast.error("Unable to start matchmaking"); }
+  };
 
-    enterQueue();
+  useEffect(() => {
+    if (privateMatchId) startSearch();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  }, [privateMatchId]);
 
   const assignSides = (md?: any) => {
     const data = md ?? matchData;
@@ -240,7 +216,7 @@ export default function PvPCoinFlipGame() {
         transactionRecorded.current = true;
         refreshWalletsFromBackend().catch(() => {});
         addToSessionHistory({
-          opponent: gameOpponentName, result: won ? "win" : "loss",
+          opponent: gameOpponentName, opponentAvatar: gameOpponentAvatar, result: won ? "win" : "loss",
           outcome: result, amount: won ? winnings - stakeAmount : stakeAmount, stake: stakeAmount,
         });
         addGameResult({
@@ -248,14 +224,6 @@ export default function PvPCoinFlipGame() {
           winAmount: won ? winnings : 0, profit: won ? winnings - stakeAmount : -stakeAmount,
           won, opponent: gameOpponentName, outcome: result,
         });
-        addNotification(
-          won ? "game_win" : "game_loss",
-          won ? "🎉 Coin Flip Victory!" : "Coin Flip",
-          won
-            ? `Won ${formatCurrencyNoDecimals(winnings - stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`
-            : `Lost ${formatCurrencyNoDecimals(stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`,
-          { game: "coin_flip", stake: stakeAmount, payout: won ? winnings : 0, outcome: result }
-        );
         if (won) liveActivityService.addActivity("game_win", myUsername, `won in Coin Flip`, winnings - stakeAmount);
       }
       setGameState("showing_result");
@@ -280,8 +248,9 @@ export default function PvPCoinFlipGame() {
     else navigate("/game/pvp-coinflip");
   };
 
-  const totalPot = stakeAmount * 2;
-  const winnerGets = Number(matchData?.payout ?? 0);
+  const totalPot = Number(matchData?.totalPool ?? stakeAmount);
+  const winnerGets = Number(matchData?.payout ?? (feeRate > 0 ? totalPot * (1 - feeRate) : 0));
+  const feePercent = feeRate * 100;
 
   return (
     <ResponsiveLayout>
@@ -300,30 +269,26 @@ export default function PvPCoinFlipGame() {
           </Button>
         </div>
 
-        {/* [Title Row] - Title + Stake Room + Rules Button (Same Line) */}
-        <div className="flex items-center justify-between gap-4">
-          {/* Left: Title + Stake Room */}
-          <div className="flex items-baseline gap-[6px]">
+        {/* [Title Row] - Spin Battle-style two-row header */
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+          <div className="min-w-0 flex items-center gap-[6px]">
             <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Coin Flip</h1>
             <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
           </div>
-
-          {/* Right: Fairness + Rules Buttons */}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRules(!showRules)}
-              className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
-            >
-              <Info className="h-4 w-4 mr-2" />
-              Rules
-            </Button>
-          </div>
+          <div className="flex items-center justify-end"><Button
+  variant="outline"
+  size="sm"
+  onClick={() => setShowRules(!showRules)}
+  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
+>
+  <Info className="h-4 w-4 mr-2" />
+  Rules
+</Button></div>
+          <div></div>
+          <div className="flex items-center justify-end"><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button></div>
         </div>
 
-        {/* Game Rules Panel */}
+/* Game Rules Panel */}
         {showRules && (
           <Card className="border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <div className="p-4">
@@ -396,6 +361,13 @@ export default function PvPCoinFlipGame() {
 
           {/* Game Area */}
           <div className="min-h-[280px] flex flex-col items-center justify-center">
+            {/* Idle State — no search or stake deduction until the user presses Search */}
+            {gameState === "idle" && (
+              <div className="text-center">
+                <Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button>
+              </div>
+            )}
+
             {/* Searching State */}
             {gameState === "searching" && (
               <div className="text-center">
@@ -497,31 +469,20 @@ export default function PvPCoinFlipGame() {
       {sessionHistory.length > 0 && (
         <Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="p-4">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-300 mb-3">Session History (${stakeAmount} Stake)</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-300 mb-3">Your History (${stakeAmount} Stake)</h3>
             <div className="space-y-2">
               {sessionHistory.map((record) => (
-                <div
-                  key={record.id}
-                  className="flex items-center justify-between p-2 rounded bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50"
-                >
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 dark:from-gray-600 dark:to-gray-700 flex items-center justify-center text-sm overflow-hidden">
-                      {/* Win → current user avatar from identity; Loss → opponent initial derived from name */}
-                      <PlayerAvatar avatar={record.result === "win" ? identity.avatar : record.opponent.charAt(0).toUpperCase()} />
-                    </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                      record.result === "win"
-                        ? "bg-green-500/20 text-green-600 dark:text-green-400"
-                        : "bg-red-500/20 text-red-600 dark:text-red-400"
-                    }`}>
-                      {record.result === "win" ? "WIN" : "LOSS"}
-                    </span>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">{record.result === "win" ? myUsername : record.opponent}</span>
-                    <span className="text-xs text-gray-500">• {record.outcome.toUpperCase()}</span>
+                <div key={record.id} className="flex items-center justify-between p-2.5 rounded bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0"><PlayerAvatar avatar={identity.avatar} /></div>
+                    <span className="text-[11px] text-gray-500 shrink-0">You</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded shrink-0 ${record.result === "win" ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-red-500/20 text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "WIN" : "LOSS"}</span>
+                    <span className="text-xs text-gray-500 shrink-0">vs</span>
+                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden shrink-0"><PlayerAvatar avatar={record.opponentAvatar ?? record.opponent.charAt(0).toUpperCase()} /></div>
+                    <span className="text-xs text-gray-600 dark:text-gray-400 truncate">{record.opponent}</span>
+                    <span className="text-xs text-gray-500 shrink-0">• {record.outcome.toUpperCase()}</span>
                   </div>
-                  <div className={`text-sm font-bold ${
-                    record.result === "win" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                  }`}>
+                  <div className={`text-sm font-bold ml-2 shrink-0 ${record.result === "win" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                     {record.result === "win" ? "+" : "-"}{formatCurrencyNoDecimals(record.amount)}
                   </div>
                 </div>
@@ -535,7 +496,7 @@ export default function PvPCoinFlipGame() {
       <Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm">
         <div className="p-3">
           <div className="text-xs text-gray-600 dark:text-gray-400 text-center">
-            Platform fee: {PLATFORM_FEE_PERCENT}% • Winner receives: {formatCurrencyNoDecimals(totalPot - Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100)))}
+            Platform fee: {feePercent}% • Winner receives: {formatCurrencyNoDecimals(winnerGets)}
           </div>
         </div>
       </Card>
@@ -576,7 +537,7 @@ export default function PvPCoinFlipGame() {
               </div>
               {isWinner && (
                 <div className="text-xs text-gray-600 dark:text-gray-500 mt-2">
-                  Winnings: {formatCurrencyNoDecimals(winAmount)} (after {PLATFORM_FEE_PERCENT}% fee)
+                  Winnings: {formatCurrencyNoDecimals(winAmount)} (after {feePercent}% fee)
                 </div>
               )}
             </div>
@@ -595,6 +556,13 @@ export default function PvPCoinFlipGame() {
                 className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
               >
                 Back to Stake Selection
+              </Button>
+              <Button onClick={() => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setGameState("ready"); }}>Search for New Opponent</Button>
+              <Button
+                onClick={() => { setShowResultPopup(false); navigate(`/game/pvp-coinflip/play?stake=${stakeAmount}`); }}
+                className="w-full mt-2"
+              >
+                Search for New Opponent
               </Button>
             </div>
           </div>
