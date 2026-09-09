@@ -2,6 +2,11 @@ html {
   scroll-behavior: smooth;
 }
 
+/* SVG avatars used by the Spin Battle wheel must be clipped to the circular avatar frame. */
+svg image {
+  clip-path: circle(50%);
+}
+
 @keyframes flipCoin {
   0% {
     transform: rotateY(0deg) scale(1);
