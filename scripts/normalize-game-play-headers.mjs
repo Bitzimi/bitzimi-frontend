@@ -54,11 +54,16 @@ ${indent}</div>
   replaceSection(path, "/* [Title Row]", "/* Game Rules Panel */", replacement);
 }
 
-// Reaction Tap has no fairness control. Keep its existing gameplay/rules content and replace only the top header.
+// Reaction Tap has no fairness control. It keeps the title/stake only on row 1;
+// row 2 left is intentionally empty and Rules remains on the right.
 {
   const path = "src/app/pages/ReactionTapGameRoom.tsx";
   const s = fs.readFileSync(path, "utf8");
-  const start = s.indexOf("        {/* Header */}");
+  const markers = [
+    "        {/* Header - Spin Battle-style two-row layout; Reaction Tap has no fairness control */}",
+    "        {/* Header */}",
+  ];
+  const start = markers.map(m => s.indexOf(m)).find(i => i >= 0) ?? -1;
   const end = s.indexOf("        {showRules && (", start);
   if (start < 0 || end < 0) throw new Error(`${path}: header boundaries not found`);
   const replacement = `        {/* Header - Spin Battle-style two-row layout; Reaction Tap has no fairness control */}
@@ -77,9 +82,7 @@ ${indent}</div>
                 <Info className="h-4 w-4 mr-2" />Rules
               </Button>
             </div>
-            <div className="min-w-0 flex items-center gap-[6px]">
-              <span className="text-sm text-gray-500 whitespace-nowrap">Reaction Tap - Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
-            </div>
+            <div></div>
           </div>
         </div>
 `;
