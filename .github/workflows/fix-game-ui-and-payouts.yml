@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[game-fix-applied]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,9 +16,13 @@ jobs:
 
       - name: Apply targeted corrections
         run: |
+          if git log -1 --pretty=%B | grep -q '\[game-fix-applied\]'; then
+            echo "Correction commit detected; nothing to patch."
+            exit 0
+          fi
           python3 <<'PY'
           from pathlib import Path
-          
+
           def replace(path, old, new, label):
               p = Path(path)
               s = p.read_text()
@@ -29,28 +32,21 @@ jobs:
               p.write_text(s.replace(old, new, 1))
               print(f"OK {label}")
               return True
-          
-          # Coin Flip: result/payout shown in the game must come from the
-          # authoritative settled match, not a frontend fee calculation.
-          replace(
-            'src/app/pages/PvPCoinFlipGame.tsx',
+
+          replace('src/app/pages/PvPCoinFlipGame.tsx',
             'const totalPot   = stakeAmount * 2;\n    const feeAmount  = Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100));\n    const winnings   = totalPot - feeAmount;',
             'const totalPot   = Number(md.totalPool ?? stakeAmount * 2);\n    const feeAmount  = Number(md.platformFee ?? 0);\n    const winnings   = Number(md.payout ?? 0);',
             'coin flip authoritative payout')
-          replace(
-            'src/app/pages/PvPCoinFlipGame.tsx',
+          replace('src/app/pages/PvPCoinFlipGame.tsx',
             '  const winnerGets = totalPot * 0.9; // 90% after 10% platform fee',
             '  const winnerGets = Number(matchData?.payout ?? 0);',
             'coin flip winner preview')
-          
-          # Dice Clash: same authoritative payout rule.
-          replace(
-            'src/app/pages/DiceDuelGame.tsx',
+
+          replace('src/app/pages/DiceDuelGame.tsx',
             '  const PLATFORM_FEE_PERCENT = 0.1; // 10%\n  const totalPool = stake * 2;\n  const platformFee = totalPool * PLATFORM_FEE_PERCENT;\n  const winnerPayout = totalPool - platformFee;',
             '  const totalPool = Number(matchData?.totalPool ?? stake * 2);\n  const platformFee = Number(matchData?.platformFee ?? 0);\n  const winnerPayout = Number(matchData?.payout ?? 0);',
             'dice clash authoritative payout')
-          
-          # Reaction Tap: backend MatchResult already exposes platformFee and payout.
+
           rp = Path('src/app/pages/ReactionTapGameRoom.tsx')
           s = rp.read_text()
           s = s.replace('import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp } from "lucide-react";',
@@ -61,7 +57,6 @@ jobs:
                         '    const fee        = Number(match.platformFee ?? 0);\n    const payout     = Number(match.payout ?? 0);')
           s = s.replace('  const winnerPayout    = stakeAmount * 2 * 0.9;',
                         '  const winnerPayout    = Number(winAmount || 0) || 0;')
-          # Move the wallet card out of the header and into the sidebar immediately before Room Activity.
           wallet = '''            <Card className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 transition-all duration-300 ${walletAnimation ? "scale-105" : ""}`}>
               <div className="px-3 sm:px-4 py-2 sm:py-2.5">
                 <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 mb-0.5">Game Wallet</p>
@@ -80,7 +75,6 @@ jobs:
             </Card>
             <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 sticky top-4">'''
           s = s.replace(sidebar_marker, sidebar_replacement, 1)
-          # Add Rules control to the existing header and a concise rules panel.
           header_end = '''          </div>
         </div>
 
@@ -109,15 +103,11 @@ jobs:
           s = s.replace(header_end, header_new, 1)
           s = s.replace('Fee (10%)', 'Platform Fee')
           rp.write_text(s)
-          print('OK reaction tap corrections')
-          
-          # Header layout for Coin Flip and Dice Clash: Rules stays on the title row;
-          # Verify Fairness moves to the next row on the left, matching the requested structure.
+
           css = Path('src/app/styles/globals.css')
           extra = r'''
 
-/* Game header alignment: Coin Flip / Dice Clash. Uses :has() only for these
-   headers because their button group uniquely contains both Rules and Verify Fairness. */
+/* Game header alignment: Coin Flip / Dice Clash. */
 @supports selector(:has(*)) {
   .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) {
     display: grid !important;
@@ -125,29 +115,15 @@ jobs:
     gap: 0.5rem 1rem;
     align-items: center;
   }
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:first-child {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:last-child {
-    display: contents;
-  }
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-info) {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-  }
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-shield) {
-    grid-column: 1;
-    grid-row: 2;
-    justify-self: start;
-  }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:first-child { grid-column: 1; grid-row: 1; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:last-child { display: contents; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-info) { grid-column: 2; grid-row: 1; justify-self: end; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-shield) { grid-column: 1; grid-row: 2; justify-self: start; }
 }
 '''
           current = css.read_text()
           if 'Game header alignment: Coin Flip / Dice Clash.' not in current:
               css.write_text(current + extra)
-          
           PY
 
       - name: Commit final source corrections
