@@ -1,18 +1,9 @@
 /**
  * PlayerAvatar — the ONLY way to render any player avatar on the platform.
  *
- * Sources:
- *   Real user  → identity.avatar  (always set: uploaded image OR first letter of username)
- *   Bot player → bot.avatar       (first letter of bot name, e.g. "A")
- *
- * Rendering logic:
- *   If `avatar` is an image (data:, http://, https://, blob:) → <img>
- *   Otherwise → render the text character as-is
- *
- * Usage:
- *   <PlayerAvatar avatar={identity.avatar} />           // real user
- *   <PlayerAvatar avatar={player.avatar} />             // bot (single letter)
- *   <PlayerAvatar avatar={isCurrentUser ? identity.avatar : player.avatar} />
+ * Real users use the canonical identity/profile avatar. Uploaded avatars may be
+ * returned by the backend as an absolute URL, a backend-relative /uploads URL,
+ * or (during the optimistic upload state) a data URL.
  */
 
 interface PlayerAvatarProps {
@@ -20,24 +11,36 @@ interface PlayerAvatarProps {
   className?: string;
 }
 
+const API_BASE = ((import.meta as any).env?.VITE_API_URL as string | undefined)?.replace(/\/$/, "") || "";
+
+/** Resolve backend-relative stored files without treating the storage key as text. */
+export function resolveAvatarUrl(value: string): string {
+  if (!value) return value;
+  if (/^(data:image|https?:\/\/|blob:)/i.test(value)) return value;
+  if (value.startsWith("/uploads/")) return API_BASE ? `${API_BASE}${value}` : value;
+  return value;
+}
+
 export function isImage(value: string): boolean {
+  const resolved = resolveAvatarUrl(value);
   return (
-    value.startsWith("data:image") ||
-    value.startsWith("http://") ||
-    value.startsWith("https://") ||
-    value.startsWith("blob:")
+    resolved.startsWith("data:image") ||
+    resolved.startsWith("http://") ||
+    resolved.startsWith("https://") ||
+    resolved.startsWith("blob:")
   );
 }
 
 export function PlayerAvatar({ avatar, className = "" }: PlayerAvatarProps) {
-  if (isImage(avatar)) {
+  const resolved = resolveAvatarUrl(avatar);
+  if (isImage(resolved)) {
     return (
       <img
-        src={avatar}
+        src={resolved}
         className={`w-full h-full object-cover ${className}`}
         alt=""
       />
     );
   }
-  return <span className={className}>{avatar}</span>;
+  return <span className={className}>{resolved}</span>;
 }
