@@ -11,16 +11,17 @@ export function ProfessionalGoldCoin({ side, isAnimating = false }: Professional
 
   return (
     <div
-      className={`relative w-48 h-48 md:w-60 md:h-60 ${isAnimating ? "inline-block" : ""}`}
-      style={{ perspective: "1200px" }}
+      className={`relative w-52 h-52 md:w-64 md:h-64 ${isAnimating ? "inline-block" : ""}`}
+      style={{ perspective: "1400px" }}
       aria-label={`Coin showing ${label}`}
     >
       <div
-        className="absolute left-1/2 top-1/2 w-[82%] h-[82%] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          background: "radial-gradient(circle, rgba(245,185,35,.24), rgba(245,185,35,0) 68%)",
-          filter: "blur(16px)",
-        }}
+        className="absolute left-1/2 top-[54%] w-[76%] h-[20%] -translate-x-1/2 rounded-full"
+        style={{ background: "rgba(0,0,0,.58)", filter: "blur(14px)" }}
+      />
+      <div
+        className="absolute left-1/2 top-1/2 w-[88%] h-[88%] -translate-x-1/2 -translate-y-1/2 rounded-full"
+        style={{ background: "radial-gradient(circle, rgba(255,208,65,.25), rgba(255,208,65,0) 67%)", filter: "blur(18px)" }}
       />
 
       <div
@@ -32,81 +33,79 @@ export function ProfessionalGoldCoin({ side, isAnimating = false }: Professional
             : { transform: "rotateX(0deg) rotateY(0deg)" }),
         }}
       >
+        {/* Metallic outer rim / edge */}
         <div
-          className="absolute inset-[2%] rounded-full"
+          className="absolute inset-[1%] rounded-full"
           style={{
-            background: "linear-gradient(145deg, #fff2a8 0%, #f7ca43 18%, #b97c09 52%, #6c4300 78%, #e0a91f 100%)",
-            boxShadow: "0 24px 45px rgba(0,0,0,.48), 0 0 34px rgba(244,190,55,.22), inset 0 3px 4px rgba(255,255,255,.72), inset 0 -7px 11px rgba(60,35,0,.5)",
-            transform: "translateZ(0px)",
+            background: "linear-gradient(180deg, #fff4b0 0%, #dca82a 11%, #805000 38%, #4e2e00 52%, #a96f08 72%, #f3c94b 92%, #fff0a0 100%)",
+            boxShadow: "0 28px 46px rgba(0,0,0,.55), inset 0 2px 3px rgba(255,255,255,.8), inset 0 -9px 14px rgba(45,25,0,.65), 0 0 38px rgba(245,193,55,.18)",
+            transform: "translateZ(0)",
           }}
         >
+          {/* Fine milled edge */}
           <div
-            className="absolute inset-0 rounded-full"
+            className="absolute inset-[1.5%] rounded-full"
             style={{
-              background: "repeating-conic-gradient(from 0deg, rgba(73,43,0,.55) 0deg 1deg, rgba(255,230,120,.35) 1deg 2deg, transparent 2deg 4deg)",
-              WebkitMaskImage: "radial-gradient(circle, transparent 0 79%, #000 80% 100%)",
-              maskImage: "radial-gradient(circle, transparent 0 79%, #000 80% 100%)",
-              opacity: .9,
+              background: "repeating-conic-gradient(from 0deg, rgba(67,39,0,.65) 0deg 1.2deg, rgba(255,236,143,.5) 1.2deg 2.4deg, transparent 2.4deg 4deg)",
+              WebkitMaskImage: "radial-gradient(circle, transparent 0 82%, #000 83% 100%)",
+              maskImage: "radial-gradient(circle, transparent 0 82%, #000 83% 100%)",
             }}
           />
 
+          {/* Raised coin face */}
           <div
             className="absolute inset-[5%] rounded-full"
             style={{
-              background: "linear-gradient(135deg, rgba(255,255,255,.7), rgba(255,255,255,0) 28%, rgba(73,43,0,.18) 72%, rgba(255,230,120,.35))",
-              border: "2px solid rgba(255,239,158,.75)",
-              boxShadow: "inset 0 0 0 2px rgba(91,54,0,.28), inset 0 0 22px rgba(255,255,255,.16)",
+              background: "radial-gradient(circle at 31% 20%, #fff4ad 0%, #f6ce55 17%, #d69b1b 46%, #9a6207 72%, #5f3800 100%)",
+              border: "2px solid rgba(255,241,163,.82)",
+              boxShadow: "inset 0 2px 5px rgba(255,255,255,.78), inset 0 -9px 16px rgba(68,38,0,.55), 0 2px 2px rgba(48,27,0,.55)",
+              transform: "translateZ(2px)",
             }}
-          />
-
-          <div className="absolute inset-[10%] rounded-full overflow-hidden">
+          >
             <div
-              className="absolute inset-0"
+              className="absolute inset-[4%] rounded-full"
               style={{
-                background: "radial-gradient(circle at 32% 20%, rgba(255,255,255,.62), transparent 20%), radial-gradient(circle at 68% 80%, rgba(70,38,0,.28), transparent 48%)",
+                border: "2px solid rgba(90,53,0,.35)",
+                boxShadow: "inset 0 0 0 2px rgba(255,235,139,.38), inset 0 0 22px rgba(255,255,255,.14)",
               }}
             />
             <div
-              className="absolute inset-[7%] rounded-full"
-              style={{ border: "1px solid rgba(105,63,0,.45)" }}
-            />
-            <div
-              className="absolute inset-[12%] rounded-full"
-              style={{ border: "1px dashed rgba(255,235,145,.62)" }}
+              className="absolute inset-[9%] rounded-full"
+              style={{ border: "1px dashed rgba(255,239,153,.58)" }}
             />
 
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <svg viewBox="0 0 80 80" className="w-14 h-14 md:w-16 md:h-16 mb-1" aria-hidden="true">
-                <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(255,240,166,.78)" strokeWidth="2" />
-                <circle cx="40" cy="40" r="24" fill="none" stroke="rgba(101,60,0,.45)" strokeWidth="1.5" />
-                <path d="M29 51V28h12c7 0 11 3 11 8 0 3-2 5-5 6 4 1 6 4 6 7 0 5-4 8-12 8H29Zm7-14h5c3 0 5-1 5-3s-2-3-5-3h-5v6Zm0 11h6c3 0 5-1 5-3s-2-3-5-3h-6v6Z" fill="rgba(102,61,0,.72)" />
-                <path d="M17 40h8M55 40h8M40 17v8M40 55v8" stroke="rgba(255,239,158,.7)" strokeWidth="2" strokeLinecap="round" />
+              <svg viewBox="0 0 100 100" className="w-16 h-16 md:w-[4.5rem] md:h-[4.5rem] mb-1" aria-hidden="true">
+                <circle cx="50" cy="50" r="34" fill="none" stroke="rgba(255,243,175,.82)" strokeWidth="2.5" />
+                <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(92,54,0,.48)" strokeWidth="1.5" />
+                <path d="M36 66V34h16c9 0 14 4 14 10 0 4-2 7-7 9 5 1 8 5 8 9 0 7-6 11-16 11H36Zm8-19h7c5 0 7-2 7-4 0-3-2-4-7-4h-7v8Zm0 14h9c4 0 7-2 7-5 0-3-3-5-7-5h-9v10Z" fill="rgba(91,53,0,.78)" />
+                <path d="M20 50h9M71 50h9M50 20v9M50 71v9" stroke="rgba(255,242,168,.78)" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
               <div
-                className="font-black tracking-[0.18em]"
+                className="font-black tracking-[0.16em]"
                 style={{
-                  fontSize: "clamp(1.35rem, 4vw, 2.2rem)",
-                  color: "#704900",
-                  textShadow: "0 1px 0 rgba(255,247,188,.85), 0 3px 4px rgba(57,33,0,.4)",
-                  WebkitTextStroke: "1px rgba(86,50,0,.5)",
+                  fontSize: "clamp(1.35rem, 4.2vw, 2.25rem)",
+                  color: "#704800",
+                  textShadow: "0 1px 0 rgba(255,250,201,.95), 0 3px 4px rgba(55,31,0,.48)",
+                  WebkitTextStroke: "1px rgba(75,42,0,.45)",
                 }}
               >
                 {label}
               </div>
-              <div className="mt-1 text-[8px] md:text-[9px] font-bold tracking-[0.42em] text-[#76500b]/75">
+              <div className="mt-1 text-[8px] md:text-[9px] font-bold tracking-[0.42em] text-[#704b08]/80">
                 BITZIMI • {mark}
               </div>
             </div>
-          </div>
 
-          <div
-            className="absolute left-[17%] top-[11%] w-[38%] h-[18%] rounded-full"
-            style={{
-              background: "linear-gradient(125deg, rgba(255,255,255,.8), rgba(255,255,255,0))",
-              transform: "rotate(-18deg)",
-              filter: "blur(.2px)",
-            }}
-          />
+            <div
+              className="absolute left-[15%] top-[9%] w-[42%] h-[17%] rounded-full"
+              style={{
+                background: "linear-gradient(125deg, rgba(255,255,255,.82), rgba(255,255,255,0))",
+                transform: "rotate(-18deg)",
+                filter: "blur(.2px)",
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
