@@ -16,7 +16,7 @@ export function ProfessionalGoldCoin({ side, isAnimating = false }: Professional
         style={{
           transformStyle: "preserve-3d",
           ...(isAnimating
-            ? { animation: "premiumCoinFlip 0.7s cubic-bezier(.4,.05,.2,1) infinite" }
+            ? { animation: "flipCoin 0.7s cubic-bezier(.4,.05,.2,1) infinite" }
             : {}),
         }}
       >
