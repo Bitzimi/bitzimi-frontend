@@ -66,7 +66,7 @@ s = s.replace(header_end, header_new, 1)
 s = s.replace('Fee (10%)', 'Platform Fee')
 rp.write_text(s)
 
-css = Path("src/app/styles/globals.css")
+css = Path("src/styles/globals.css")
 extra = r'''
 
 /* Game header alignment: Coin Flip / Dice Clash. */
@@ -83,7 +83,7 @@ if "Game header alignment: Coin Flip / Dice Clash." not in current: css.write_te
 
 subprocess.run(["git", "config", "user.name", "github-actions[bot]"])
 subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"])
-subprocess.run(["git", "add", "src/app/pages/PvPCoinFlipGame.tsx", "src/app/pages/DiceDuelGame.tsx", "src/app/pages/ReactionTapGameRoom.tsx", "src/app/styles/globals.css"])
+subprocess.run(["git", "add", "src/app/pages/PvPCoinFlipGame.tsx", "src/app/pages/DiceDuelGame.tsx", "src/app/pages/ReactionTapGameRoom.tsx", "src/styles/globals.css"])
 if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode == 0: raise SystemExit(0)
 subprocess.run(["git", "commit", "-m", "fix: apply game payout and header corrections [game-fix-applied]"], check=True)
 branch = f"game-fix-{subprocess.check_output(['git','rev-parse','--short','HEAD'], text=True).strip()}"
