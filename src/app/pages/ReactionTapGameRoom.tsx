@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ResponsiveLayout } from "../components/ResponsiveLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp } from "lucide-react";
+import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp, Info } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useSettings } from "../contexts/SettingsContext";
 import { useWallet } from "../contexts/WalletContext";
@@ -88,6 +88,7 @@ export default function ReactionTapGameRoom() {
   const [showResultPopup,  setShowResultPopup]  = useState(false);
   const [historyKey,       setHistoryKey]       = useState(0);
   const [walletAnimation,  setWalletAnimation]  = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   // ── Refs ──────────────────────────────────────────────────────────────────────
   const signalSentAtRef  = useRef<number | null>(null); // unix ms from server
@@ -225,8 +226,8 @@ export default function ReactionTapGameRoom() {
     const voided     = match.status === "cancelled";
     const won        = !voided && match.youWon;
     const totalPool  = stakeAmount * 2;
-    const fee        = Math.floor(totalPool * 0.10);
-    const payout     = totalPool - fee;
+    const fee        = Number(match.platformFee ?? 0);
+    const payout     = Number(match.payout ?? 0);
 
     setIsWinner(won);
     setIsVoided(voided);
@@ -410,7 +411,7 @@ export default function ReactionTapGameRoom() {
   }, [navigate, stopAllTimers, roomCode, stakeAmount]);
 
   // ── Derived display values ─────────────────────────────────────────────────────
-  const winnerPayout    = stakeAmount * 2 * 0.9;
+  const winnerPayout    = Number(winAmount || 0) || 0;
   const isTapDisabled   = gameState !== "signal_shown" && gameState !== "waiting_signal";
   const showLiveTimer   = gameState === "signal_shown" && yourTapTime === null;
 
@@ -436,14 +437,26 @@ export default function ReactionTapGameRoom() {
                 </p>
               </div>
             </div>
-            <Card className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 transition-all duration-300 ${walletAnimation ? "scale-105" : ""}`}>
-              <div className="px-3 sm:px-4 py-2 sm:py-2.5">
-                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 mb-0.5">Game Wallet</p>
-                <p className="text-base sm:text-xl font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(balances.game)}</p>
-              </div>
-            </Card>
+
           </div>
+            <Button variant="outline" size="sm" onClick={() => setShowRules(v => !v)} className="shrink-0">
+              <Info className="h-4 w-4 mr-2" />Rules
+            </Button>
         </div>
+        {showRules && (
+          <Card className="mt-3 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+            <div className="p-4">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">How to Play Reaction Tap</h3>
+              <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 list-disc list-inside">
+                <li>Two real players enter the same stake room and each stakes the room amount.</li>
+                <li>Both players must be ready before the server sends the reaction signal.</li>
+                <li>Tap only when the signal appears. Tapping before it is an early tap and loses the match.</li>
+                <li>The faster valid reaction wins; if both players tap early, the match is void and stakes are refunded.</li>
+                <li>The winner receives the server-calculated pool payout after the current platform fee.</li>
+              </ul>
+            </div>
+          </Card>
+        )}
 
         {/* Main */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -704,6 +717,12 @@ export default function ReactionTapGameRoom() {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
+            <Card className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 transition-all duration-300 mb-4 ${walletAnimation ? "scale-105" : ""}`}>
+              <div className="px-3 sm:px-4 py-2 sm:py-2.5">
+                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 mb-0.5">Game Wallet</p>
+                <p className="text-base sm:text-xl font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(balances.game)}</p>
+              </div>
+            </Card>
             <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 sticky top-4">
               <div className="p-4 border-b border-gray-200 dark:border-gray-800">
                 <div className="flex items-center gap-2">
@@ -801,7 +820,7 @@ export default function ReactionTapGameRoom() {
                         <span className="font-semibold text-yellow-600 dark:text-yellow-400">{formatCurrencyNoDecimals(stakeAmount * 2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Fee (10%)</span>
+                        <span className="text-gray-600 dark:text-gray-400">Platform Fee</span>
                         <span className="font-semibold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(platformFee)}</span>
                       </div>
                       <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700 flex justify-between">

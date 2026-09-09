@@ -67,10 +67,9 @@ export default function DiceDuelGame() {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Platform fee calculations
-  const PLATFORM_FEE_PERCENT = 0.1; // 10%
-  const totalPool = stake * 2;
-  const platformFee = totalPool * PLATFORM_FEE_PERCENT;
-  const winnerPayout = totalPool - platformFee;
+  const totalPool = Number(matchData?.totalPool ?? stake * 2);
+  const platformFee = Number(matchData?.platformFee ?? 0);
+  const winnerPayout = Number(matchData?.payout ?? 0);
 
   // Real-player matchmaking — no bots, no fake opponents
   useEffect(() => {
