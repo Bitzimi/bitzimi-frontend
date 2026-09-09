@@ -162,7 +162,7 @@ export const gameMatchmakingService = {
   async getGameConfig(gameType: string): Promise<GameConfig> { return apiFetch(`/api/v1/games/config/${encodeURIComponent(gameType)}`); },
   async signalReady(matchId: string): Promise<{ signalSentAt?: string; delayMs?: number; waiting?: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/ready`, { method: "POST", body: "{}" }); },
   async submitTap(matchId: string, tapMs: number): Promise<{ submitted: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/tap`, { method: "POST", body: JSON.stringify({ tapMs }) }); },
-  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake })); },
+  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake }) }); },
   async getRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}`); },
   async joinRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}/join`, { method: "POST", body: "{}" }); },
   async startMatch(code: string): Promise<{ matchId: string; room: PrivateRoom }> { return apiFetch(`/api/v1/games/private-rooms/${code}/start`, { method: "POST", body: "{}" }); },
