@@ -1,15 +1,31 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 function getAuthHeader(): Record<string,string>{const token=localStorage.getItem("bitzimi_access_token");return token?{Authorization:`Bearer ${token}`}:{ };}
-async function apiFetch<T>(path:string,options?:RequestInit):Promise<T>{const res=await fetch(`${API_BASE}${path}`,{...options,headers:{"Content-Type":"application/json",...getAuthHeader(),...(options?.headers??{})}});const json=await res.json();if(!res.ok)throw Object.assign(new Error(json?.error?.message??"API error"),{code:json?.error?.code,status:res.status});return json.data as T;}
+async function apiFetch<T>(path:string,options?:RequestInit):Promise<T>{const res=await fetch(`${API_BASE}${path}`,{...options,headers:{"Content-Type":"application/json",...getAuthHeader(),...(options?.headers??{})}});const json=await res.json().catch(()=>({}));if(!res.ok)throw Object.assign(new Error(json?.error?.message??"API error"),{code:json?.error?.code,status:res.status});return json.data as T;}
 
 export type MatchGameType="dice_clash"|"pvp_coinflip"|"reaction_tap";
 export interface QueueResult{status:"waiting"|"matched"|"cancelled";queueId?:string;matchId?:string;}
 export interface PrivateRoom{id:string;code:string;gameType:string;stake:number;hostId:string;guestId:string|null;status:"waiting"|"ready"|"active"|"rematch"|"completed"|"cancelled";currentMatchId:string|null;rematchHostReady:boolean;rematchGuestReady:boolean;createdAt:string;expiresAt:string;host:{id:string;profile:{username:string;avatarUrl:string|null}|null};guest:{id:string;profile:{username:string;avatarUrl:string|null}|null}|null;}
 export interface MatchResult{matchId:string;gameType:string;stake:number;totalPool:number;platformFee:number;status:"active"|"settled"|"cancelled";opponent:{username:string;userId:string};result:Record<string,any>|null;winnerId:string|null;youWon:boolean;payout:number;createdAt:string;settledAt:string|null;signalSentAt:string|null;yourReady:boolean;opponentReady:boolean;}
+
+// Keep enough context to transparently replace a lease that expires while the
+// user is still inside a matchmaking screen. This prevents the old queue TTL
+// from being interpreted by the UI as "kick the player out".
+let lastQueueContext:{gameType:MatchGameType;stake:number;queueId:string}|null=null;
+
 export const gameMatchmakingService={
- async joinQueue(gameType:MatchGameType,stake:number):Promise<QueueResult>{return apiFetch("/api/v1/games/queue",{method:"POST",body:JSON.stringify({gameType,stake})});},
- async pollQueue(queueId:string):Promise<QueueResult>{return apiFetch(`/api/v1/games/queue/${queueId}`);},
- async leaveQueue(queueId:string):Promise<void>{await apiFetch(`/api/v1/games/queue/${queueId}`,{method:"DELETE"});},
+ async joinQueue(gameType:MatchGameType,stake:number):Promise<QueueResult>{const result=await apiFetch<QueueResult>("/api/v1/games/queue",{method:"POST",body:JSON.stringify({gameType,stake})});if(result.queueId)lastQueueContext={gameType,stake,queueId:result.queueId};return result;},
+ async pollQueue(queueId:string):Promise<QueueResult>{
+   try{
+     const result=await apiFetch<QueueResult>(`/api/v1/games/queue/${queueId}`);
+     if(result.status==="cancelled"&&lastQueueContext?.queueId===queueId){return this.joinQueue(lastQueueContext.gameType,lastQueueContext.stake);}
+     if(result.status==="matched"&&result.matchId)lastQueueContext=null;
+     return result;
+   }catch(error:any){
+     if(error?.status===404&&lastQueueContext?.queueId===queueId){return this.joinQueue(lastQueueContext.gameType,lastQueueContext.stake);}
+     throw error;
+   }
+ },
+ async leaveQueue(queueId:string):Promise<void>{await apiFetch(`/api/v1/games/queue/${queueId}`,{method:"DELETE"});if(lastQueueContext?.queueId===queueId)lastQueueContext=null;},
  async getMatch(matchId:string):Promise<MatchResult>{return apiFetch(`/api/v1/games/matches/${matchId}`);},
  async signalReady(matchId:string):Promise<{signalSentAt?:string;delayMs?:number;waiting?:boolean}>{return apiFetch(`/api/v1/games/matches/${matchId}/ready`,{method:"POST",body:"{}"});},
  async submitTap(matchId:string,tapMs:number):Promise<{submitted:boolean}>{return apiFetch(`/api/v1/games/matches/${matchId}/tap`,{method:"POST",body:JSON.stringify({tapMs})});},
