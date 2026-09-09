@@ -20,11 +20,11 @@ for (const [path, title, stake, indent] of [
 ${indent}<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
 ${indent}  <div className="min-w-0 flex items-center gap-[6px]">
 ${indent}    <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">${title}</h1>
-${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(${stake})}</span>
+${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room \{formatCurrencyNoDecimals(${stake})\}</span>
 ${indent}  </div>
 ${indent}  <div className="flex items-center justify-end">${rules}</div>
 ${indent}  <div className="min-w-0 flex items-center gap-[6px]">
-${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">${title} - Stake Room {formatCurrencyNoDecimals(${stake})}</span>
+${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">${title} - Stake Room \{formatCurrencyNoDecimals(${stake})\}</span>
 ${indent}  </div>
 ${indent}  <div className="flex items-center justify-end">${fairness}</div>
 ${indent}</div>
@@ -42,11 +42,11 @@ for (const [path, title] of [
 ${indent}<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
 ${indent}  <div className="min-w-0 flex items-center gap-[6px]">
 ${indent}    <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">${title}</h1>
-${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(initialStake)}</span>
+${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room \{formatCurrencyNoDecimals(initialStake)\}</span>
 ${indent}  </div>
 ${indent}  <div className="flex items-center justify-end">${rules}</div>
 ${indent}  <div className="min-w-0 flex items-center gap-2">
-${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">Round #{roundNumber}</span>
+${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">Round #\{roundNumber\}</span>
 ${indent}    <span className="inline-flex items-center gap-1 text-xs text-green-500 font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />LIVE</span>
 ${indent}  </div>
 ${indent}  <div className="flex items-center justify-end">${fairness}</div>
@@ -62,7 +62,7 @@ ${indent}</div>
   const s = fs.readFileSync(path, "utf8");
   const h = s.indexOf('<h1 className="text-xl font-bold');
   if (h < 0) throw new Error(`${path}: heading not found`);
-  let start = s.lastIndexOf("<div", h);
+  const start = s.lastIndexOf("<div", h);
   let depth = 0;
   let i = start;
   while (i < s.length) {
