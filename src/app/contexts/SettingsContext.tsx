@@ -1,10 +1,3 @@
-/**
- * SettingsContext — Phase 24.2
- *
- * Manages user preferences: theme, language, currency.
- * Language and translations are now fully backend-driven.
- * Currency: backend-driven rates. USD is the ONLY accounting currency — currency only changes DISPLAY.
- */
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 const API_BASE = (import.meta as any).env?.VITE_API_URL as string | undefined ?? "";
 function getToken() { return localStorage.getItem("bitzimi_access_token"); }
@@ -24,7 +17,12 @@ export function SettingsProvider({children}:{children:ReactNode}){
  const [availableLanguages,setAvailableLanguages]=useState<Language[]>([FALLBACK_LANGUAGE]);const [translationBundle,setTranslationBundle]=useState<Record<string,string>>({});const [translationsLoaded,setTranslationsLoaded]=useState(false);
  const [language,setLanguageState]=useState<Language>(()=>{try{const saved=localStorage.getItem("bitzimiLanguage");return saved?JSON.parse(saved):FALLBACK_LANGUAGE}catch{return FALLBACK_LANGUAGE}});
  const fetchTranslations=useCallback(async(lang:Language)=>{if(!API_BASE){setTranslationsLoaded(true);return}try{const res=await fetch(`${API_BASE}/api/v1/translations/${lang.code}`);const json=await res.json();if(json?.data)setTranslationBundle(json.data)}catch{}finally{setTranslationsLoaded(true)}},[]);
- const setLanguage=useCallback((lang:Language)=>{setLanguageState(lang);try{localStorage.setItem("bitzimiLanguage",JSON.stringify(lang))}catch{};const dir=lang.direction==="rtl"?"rtl":"ltr";document.documentElement.setAttribute("dir",dir);document.documentElement.setAttribute("lang",lang.code);fetchTranslations(lang);const token=getToken();if(API_BASE&&token)fetch(`${API_BASE}/api/v1/users/me/preferences`,{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({languagePref:lang.code)}).catch(()=>{})},[fetchTranslations]);
+ const setLanguage=useCallback((lang:Language)=>{
+   setLanguageState(lang);try{localStorage.setItem("bitzimiLanguage",JSON.stringify(lang))}catch{}
+   const dir=lang.direction==="rtl"?"rtl":"ltr";document.documentElement.setAttribute("dir",dir);document.documentElement.setAttribute("lang",lang.code);fetchTranslations(lang);
+   const token=getToken();
+   if(API_BASE&&token){fetch(`${API_BASE}/api/v1/users/me/preferences`,{method:"PATCH",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({languagePref:lang.code})}).catch(()=>{});}
+ },[fetchTranslations]);
  useEffect(()=>{if(!API_BASE)return;fetch(`${API_BASE}/api/v1/languages`).then(r=>r.json()).then(json=>{const langs:Language[]=json?.data??[];if(langs.length){setAvailableLanguages(langs);setLanguageState(prev=>langs.find(l=>l.code===prev.code)??prev)}}).catch(()=>{})},[]);
  useEffect(()=>{const dir=language.direction==="rtl"?"rtl":"ltr";document.documentElement.setAttribute("dir",dir);document.documentElement.setAttribute("lang",language.code);fetchTranslations(language)},[]);
  const [currency,setCurrencyState]=useState<Currency>(()=>{try{const saved=localStorage.getItem("bitzimiCurrency");return saved?JSON.parse(saved):CURRENCIES[0]}catch{return CURRENCIES[0]}});const [availableCurrencies,setAvailableCurrencies]=useState<Currency[]>(CURRENCIES);
