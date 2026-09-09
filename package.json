@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/normalize-game-play-headers.mjs && node scripts/apply-gameplay-flow-v2.mjs && node scripts/apply-gameplay-flow-v3.mjs && vite build",
+    "build": "node scripts/normalize-game-play-headers.mjs && node scripts/apply-gameplay-flow-v3.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -69,7 +69,6 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
-    "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "typescript": "^5.9.3",
     "vite": "6.3.5"
