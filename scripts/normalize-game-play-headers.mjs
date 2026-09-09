@@ -56,35 +56,34 @@ ${indent}</div>
   replaceSection(path, "/* [Title Row]", "/* Game Rules Panel */", replacement);
 }
 
-// Reaction Tap has no fairness control. Its header follows the same two-column/two-row structure.
+// Reaction Tap has no fairness control. Keep its existing gameplay/rules content and replace only the top header.
 {
   const path = "src/app/pages/ReactionTapGameRoom.tsx";
   const s = fs.readFileSync(path, "utf8");
-  const h = s.indexOf('<h1 className="text-xl font-bold');
-  if (h < 0) throw new Error(`${path}: heading not found`);
-  const start = s.lastIndexOf("<div", h);
-  let depth = 0;
-  let i = start;
-  while (i < s.length) {
-    if (s.startsWith("<div", i)) { depth++; i += 4; continue; }
-    if (s.startsWith("</div>", i)) { depth--; i += 6; if (depth === 0) break; continue; }
-    i++;
-  }
-  if (depth !== 0) throw new Error(`${path}: header boundary not found`);
-  const replacement = `<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center mb-6">
-  <div className="min-w-0 flex items-center gap-[6px]">
-    <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Tap</h1>
-    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
-  </div>
-  <div className="flex items-center justify-end">
-    <Button variant="outline" size="sm" onClick={() => setShowRules(!showRules)} className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 rounded-lg transition-all shrink-0">
-      <Info className="h-4 w-4 mr-2" />
-      Rules
-    </Button>
-  </div>
-  <div className="min-w-0 flex items-center gap-[6px]">
-    <span className="text-sm text-gray-500 whitespace-nowrap">Reaction Tap - Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
-  </div>
-</div>`;
-  fs.writeFileSync(path, s.slice(0, start) + replacement + s.slice(i));
+  const start = s.indexOf("        {/* Header */}");
+  const end = s.indexOf("        {showRules && (", start);
+  if (start < 0 || end < 0) throw new Error(`${path}: header boundaries not found`);
+  const replacement = `        {/* Header - Spin Battle-style two-row layout; Reaction Tap has no fairness control */}
+        <div className="mb-4 sm:mb-6">
+          <Button variant="ghost" size="sm" onClick={handleExit}
+            className="mb-3 sm:mb-4 -ml-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+            <ArrowLeft className="h-4 w-4 mr-2" />Exit Room
+          </Button>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+            <div className="min-w-0 flex items-center gap-[6px]">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Tap</h1>
+              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+            </div>
+            <div className="flex items-center justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowRules(v => !v)} className="shrink-0">
+                <Info className="h-4 w-4 mr-2" />Rules
+              </Button>
+            </div>
+            <div className="min-w-0 flex items-center gap-[6px]">
+              <span className="text-sm text-gray-500 whitespace-nowrap">Reaction Tap - Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+            </div>
+          </div>
+        </div>
+`;
+  fs.writeFileSync(path, s.slice(0, start) + replacement + s.slice(end));
 }
