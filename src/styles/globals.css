@@ -18,3 +18,13 @@ svg image {
     transform: rotateY(1800deg) scale(1);
   }
 }
+
+
+/* Game header alignment: Coin Flip / Dice Clash. */
+@supports selector(:has(*)) {
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) { display:grid !important; grid-template-columns:minmax(0,1fr) auto; gap:.5rem 1rem; align-items:center; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:first-child { grid-column:1; grid-row:1; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:last-child { display:contents; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-info) { grid-column:2; grid-row:1; justify-self:end; }
+  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-shield) { grid-column:1; grid-row:2; justify-self:start; }
+}

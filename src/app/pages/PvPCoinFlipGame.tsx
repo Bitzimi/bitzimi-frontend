@@ -215,9 +215,9 @@ export default function PvPCoinFlipGame() {
     const won: boolean      = md.youWon;
     const gameOpponentName   = md.opponent?.username ?? opponentName;
     const gameOpponentAvatar = md.opponent?.username?.charAt(0).toUpperCase() ?? opponentAvatar;
-    const totalPot   = stakeAmount * 2;
-    const feeAmount  = Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100));
-    const winnings   = totalPot - feeAmount;
+    const totalPot   = Number(md.totalPool ?? stakeAmount * 2);
+    const feeAmount  = Number(md.platformFee ?? 0);
+    const winnings   = Number(md.payout ?? 0);
 
     setPlatformFee(feeAmount);
     setCoinResult(null);
@@ -281,7 +281,7 @@ export default function PvPCoinFlipGame() {
   };
 
   const totalPot = stakeAmount * 2;
-  const winnerGets = totalPot * 0.9; // 90% after 10% platform fee
+  const winnerGets = Number(matchData?.payout ?? 0);
 
   return (
     <ResponsiveLayout>
