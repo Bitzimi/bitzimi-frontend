@@ -21,9 +21,9 @@ const write=(p,s)=>fs.writeFileSync(p,s);
  const marker='''    setGameState("flipping");\n\n    setTimeout(() => {''';
  const replacement='''    const animationStartAt = Date.parse(md.animationStartAt ?? "");\n    const animationDurationMs = Number(md.animationDurationMs ?? 2500);\n    const elapsed = Number.isFinite(animationStartAt) ? Math.max(0, Date.now() - animationStartAt) : 0;\n    setFlipElapsedMs(Math.min(elapsed, animationDurationMs));\n    setGameState("flipping");\n\n    const revealResult = () => {''';
  s=s.replace(marker,replacement);
- const endMarker='''      }, 2000);\n    }, 2500);\n  };''';
- const endReplacement='''      }, 2000);\n    };\n\n    if (elapsed >= animationDurationMs) revealResult();\n    else setTimeout(revealResult, animationDurationMs - elapsed);\n  };''';
- s=s.replace(endMarker,endReplacement);
+ const endMarkers=[`      }, 500);\n    }, 2500);\n  };`,`      }, 2000);\n    }, 2500);\n  };`];
+ const endReplacement='''      }, 500);\n    };\n\n    if (elapsed >= animationDurationMs) revealResult();\n    else setTimeout(revealResult, animationDurationMs - elapsed);\n  };''';
+ for(const endMarker of endMarkers){ if(s.includes(endMarker)){ s=s.replace(endMarker,endReplacement); break; } }
  s=s.replace('<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} />', '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} animationElapsedMs={flipElapsedMs} animationDurationMs={Number(matchData?.animationDurationMs ?? 2500)} />');
  write(p,s);
 }
