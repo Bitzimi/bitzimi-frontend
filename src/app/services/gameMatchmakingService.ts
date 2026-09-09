@@ -1,12 +1,40 @@
 import { refreshBackendToken } from "./backendAuthService";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+
+/**
+ * Backend auth is canonical. A small legacy compatibility fallback is kept
+ * for sessions created before the dedicated backend token keys existed.
+ * It only reuses an already-issued access token; it never creates credentials.
+ */
+function getAccessToken(): string | null {
+  const direct = localStorage.getItem("bitzimi_access_token");
+  if (direct) return direct;
+  try {
+    const raw = localStorage.getItem("bitzimiUser");
+    const legacyToken = raw ? JSON.parse(raw)?.accessToken : null;
+    if (typeof legacyToken === "string" && legacyToken) {
+      localStorage.setItem("bitzimi_access_token", legacyToken);
+      return legacyToken;
+    }
+  } catch {}
+  return null;
+}
+
 function getAuthHeader(): Record<string, string> {
-  const token = localStorage.getItem("bitzimi_access_token");
+  const token = getAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit, retry = true): Promise<T> {
+  // If the access token is absent but a refresh token exists, restore the
+  // backend session before the request. This prevents a protected matchmaking
+  // request from being sent anonymously after a browser reload.
+  if (retry && !path.includes("/auth/refresh") && !getAccessToken()) {
+    const refreshed = await refreshBackendToken();
+    if (refreshed) return apiFetch<T>(path, options, false);
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -18,14 +46,19 @@ async function apiFetch<T>(path: string, options?: RequestInit, retry = true): P
 
   const json = await res.json().catch(() => ({}));
 
+  // If the short-lived access token expires between requests, refresh it once
+  // and retry the exact same request. Coin Flip enqueue is idempotent on the
+  // backend, so this retry cannot create a second paid search.
   if (res.status === 401 && retry && !path.includes("/auth/refresh")) {
     const refreshed = await refreshBackendToken();
     if (refreshed) return apiFetch<T>(path, options, false);
   }
 
   if (!res.ok) {
-    throw Object.assign(new Error(json?.error?.message ?? "API error"), {
-      code: json?.error?.code,
+    const message = json?.error?.message ?? "API error";
+    const code = json?.error?.code;
+    throw Object.assign(new Error(code === "UNAUTHORIZED" ? "Your session has expired. Please log in again." : message), {
+      code,
       status: res.status,
     });
   }
@@ -162,7 +195,7 @@ export const gameMatchmakingService = {
   async getGameConfig(gameType: string): Promise<GameConfig> { return apiFetch(`/api/v1/games/config/${encodeURIComponent(gameType)}`); },
   async signalReady(matchId: string): Promise<{ signalSentAt?: string; delayMs?: number; waiting?: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/ready`, { method: "POST", body: "{}" }); },
   async submitTap(matchId: string, tapMs: number): Promise<{ submitted: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/tap`, { method: "POST", body: JSON.stringify({ tapMs }) }); },
-  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake }) }); },
+  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake })); },
   async getRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}`); },
   async joinRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}/join`, { method: "POST", body: "{}" }); },
   async startMatch(code: string): Promise<{ matchId: string; room: PrivateRoom }> { return apiFetch(`/api/v1/games/private-rooms/${code}/start`, { method: "POST", body: "{}" }); },
