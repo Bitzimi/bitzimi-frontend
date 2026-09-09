@@ -18,10 +18,6 @@ async function apiFetch<T>(path: string, options?: RequestInit, retry = true): P
 
   const json = await res.json().catch(() => ({}));
 
-  // Matchmaking requests are authenticated independently from page hydration.
-  // If the short-lived access token expires between those requests, refresh it
-  // once and retry the exact same request. Coin Flip enqueue is idempotent on
-  // the backend, so a retry can never create a second paid search.
   if (res.status === 401 && retry && !path.includes("/auth/refresh")) {
     const refreshed = await refreshBackendToken();
     if (refreshed) return apiFetch<T>(path, options, false);
@@ -45,7 +41,7 @@ export interface QueueResult {
 }
 export interface GameConfig { gameType: string; feeRate: number; feePercent: number; stakes: number[]; }
 export interface PrivateRoom { id: string; code: string; gameType: string; stake: number; hostId: string; guestId: string | null; status: "waiting" | "ready" | "active" | "rematch" | "completed" | "cancelled"; currentMatchId: string | null; rematchHostReady: boolean; rematchGuestReady: boolean; createdAt: string; expiresAt: string; host: { id: string; profile: { username: string; avatarUrl: string | null } | null }; guest: { id: string; profile: { username: string; avatarUrl: string | null } | null } | null; }
-export interface MatchResult { matchId: string; gameType: string; stake: number; totalPool: number; platformFee: number; status: "active" | "settled" | "cancelled"; opponent: { username: string; userId: string; avatar?: string | null }; result: Record<string, any> | null; winnerId: string | null; youWon: boolean; payout: number; createdAt: string; settledAt: string | null; signalSentAt: string | null; yourReady: boolean; opponentReady: boolean; }
+export interface MatchResult { matchId: string; gameType: string; stake: number; totalPool: number; platformFee: number; status: "active" | "settled" | "cancelled"; opponent: { username: string; userId: string; avatar?: string | null }; result: Record<string, any> | null; winnerId: string | null; youWon: boolean; payout: number; createdAt: string; settledAt: string | null; signalSentAt: string | null; yourReady: boolean; opponentReady: boolean; serverNow?: string; animationStartAt?: string; animationDurationMs?: number; }
 
 type PersistedQueueContext = { gameType: MatchGameType; stake: number; queueId?: string; matchId?: string; savedAt: number };
 const QUEUE_CONTEXT_PREFIX = "bitzimi:matchmaking:";
@@ -111,9 +107,6 @@ export const gameMatchmakingService = {
       }
     }
 
-    // Backend recovery is the final source of truth. This covers cleared
-    // localStorage, another tab, a browser restart, or a route/navigation that
-    // lost the local queue pointer. It is read-only and NEVER creates a queue.
     if (gameType === "pvp_coinflip") {
       const result = await apiFetch<QueueResult>(`/api/v1/games/queue/recover?gameType=pvp_coinflip&stake=${encodeURIComponent(stake)}`);
       if (!result) return null;
@@ -140,9 +133,10 @@ export const gameMatchmakingService = {
         }
         recoveredQueueIds.delete(queueId);
       }
-      if (result.status === "cancelled" && lastQueueContext) {
+      if (result.status === "cancelled") {
+        const gameType = lastQueueContext?.gameType ?? "pvp_coinflip";
         lastQueueContext = null;
-        removeContext(lastQueueContext?.gameType ?? "pvp_coinflip");
+        removeContext(gameType);
       }
       return result;
     } catch (error: any) {
@@ -168,7 +162,7 @@ export const gameMatchmakingService = {
   async getGameConfig(gameType: string): Promise<GameConfig> { return apiFetch(`/api/v1/games/config/${encodeURIComponent(gameType)}`); },
   async signalReady(matchId: string): Promise<{ signalSentAt?: string; delayMs?: number; waiting?: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/ready`, { method: "POST", body: "{}" }); },
   async submitTap(matchId: string, tapMs: number): Promise<{ submitted: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/tap`, { method: "POST", body: JSON.stringify({ tapMs }) }); },
-  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake }) }); },
+  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake })); },
   async getRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}`); },
   async joinRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}/join`, { method: "POST", body: "{}" }); },
   async startMatch(code: string): Promise<{ matchId: string; room: PrivateRoom }> { return apiFetch(`/api/v1/games/private-rooms/${code}/start`, { method: "POST", body: "{}" }); },
