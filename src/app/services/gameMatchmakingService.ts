@@ -2,11 +2,6 @@ import { refreshBackendToken } from "./backendAuthService";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 
-/**
- * Backend auth is canonical. A small legacy compatibility fallback is kept
- * for sessions created before the dedicated backend token keys existed.
- * It only reuses an already-issued access token; it never creates credentials.
- */
 function getAccessToken(): string | null {
   const direct = localStorage.getItem("bitzimi_access_token");
   if (direct) return direct;
@@ -27,9 +22,6 @@ function getAuthHeader(): Record<string, string> {
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit, retry = true): Promise<T> {
-  // If the access token is absent but a refresh token exists, restore the
-  // backend session before the request. This prevents a protected matchmaking
-  // request from being sent anonymously after a browser reload.
   if (retry && !path.includes("/auth/refresh") && !getAccessToken()) {
     const refreshed = await refreshBackendToken();
     if (refreshed) return apiFetch<T>(path, options, false);
@@ -46,9 +38,6 @@ async function apiFetch<T>(path: string, options?: RequestInit, retry = true): P
 
   const json = await res.json().catch(() => ({}));
 
-  // If the short-lived access token expires between requests, refresh it once
-  // and retry the exact same request. Coin Flip enqueue is idempotent on the
-  // backend, so this retry cannot create a second paid search.
   if (res.status === 401 && retry && !path.includes("/auth/refresh")) {
     const refreshed = await refreshBackendToken();
     if (refreshed) return apiFetch<T>(path, options, false);
@@ -66,12 +55,7 @@ async function apiFetch<T>(path: string, options?: RequestInit, retry = true): P
 }
 
 export type MatchGameType = "dice_clash" | "pvp_coinflip" | "reaction_tap";
-export interface QueueResult {
-  status: "waiting" | "matched" | "cancelled";
-  queueId?: string;
-  matchId?: string;
-  stake?: number;
-}
+export interface QueueResult { status: "waiting" | "matched" | "cancelled"; queueId?: string; matchId?: string; stake?: number; }
 export interface GameConfig { gameType: string; feeRate: number; feePercent: number; stakes: number[]; }
 export interface PrivateRoom { id: string; code: string; gameType: string; stake: number; hostId: string; guestId: string | null; status: "waiting" | "ready" | "active" | "rematch" | "completed" | "cancelled"; currentMatchId: string | null; rematchHostReady: boolean; rematchGuestReady: boolean; createdAt: string; expiresAt: string; host: { id: string; profile: { username: string; avatarUrl: string | null } | null }; guest: { id: string; profile: { username: string; avatarUrl: string | null } | null } | null; }
 export interface MatchResult { matchId: string; gameType: string; stake: number; totalPool: number; platformFee: number; status: "active" | "settled" | "cancelled"; opponent: { username: string; userId: string; avatar?: string | null }; result: Record<string, any> | null; winnerId: string | null; youWon: boolean; payout: number; createdAt: string; settledAt: string | null; signalSentAt: string | null; yourReady: boolean; opponentReady: boolean; serverNow?: string; animationStartAt?: string; animationDurationMs?: number; }
@@ -79,15 +63,7 @@ export interface MatchResult { matchId: string; gameType: string; stake: number;
 type PersistedQueueContext = { gameType: MatchGameType; stake: number; queueId?: string; matchId?: string; savedAt: number };
 const QUEUE_CONTEXT_PREFIX = "bitzimi:matchmaking:";
 const contextKey = (gameType: MatchGameType) => `${QUEUE_CONTEXT_PREFIX}${gameType}`;
-function readContext(gameType: MatchGameType): PersistedQueueContext | null {
-  try {
-    const raw = localStorage.getItem(contextKey(gameType));
-    if (!raw) return null;
-    const value = JSON.parse(raw) as PersistedQueueContext;
-    if (value.gameType !== gameType) return null;
-    return value;
-  } catch { return null; }
-}
+function readContext(gameType: MatchGameType): PersistedQueueContext | null { try { const raw = localStorage.getItem(contextKey(gameType)); if (!raw) return null; const value = JSON.parse(raw) as PersistedQueueContext; return value.gameType === gameType ? value : null; } catch { return null; } }
 function writeContext(value: PersistedQueueContext): void { try { localStorage.setItem(contextKey(value.gameType), JSON.stringify(value)); } catch {} }
 function removeContext(gameType: MatchGameType): void { try { localStorage.removeItem(contextKey(gameType)); } catch {} }
 
@@ -96,14 +72,8 @@ const recoveredQueueIds = new Map<string, string>();
 
 export const gameMatchmakingService = {
   async joinQueue(gameType: MatchGameType, stake: number): Promise<QueueResult> {
-    const result = await apiFetch<QueueResult>("/api/v1/games/queue", {
-      method: "POST",
-      body: JSON.stringify({ gameType, stake }),
-    });
-    if (result.queueId) {
-      lastQueueContext = { gameType, stake, queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) };
-      writeContext(lastQueueContext);
-    }
+    const result = await apiFetch<QueueResult>("/api/v1/games/queue", { method: "POST", body: JSON.stringify({ gameType, stake }) });
+    if (result.queueId) { lastQueueContext = { gameType, stake, queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) }; writeContext(lastQueueContext); }
     return result;
   },
 
@@ -112,42 +82,22 @@ export const gameMatchmakingService = {
     if (stored && Number(stored.stake) === Number(stake)) {
       lastQueueContext = stored;
       if (stored.matchId) {
-        try {
-          const match = await this.getMatch(stored.matchId);
-          if (match.status === "active" || match.status === "settled") return { status: "matched", queueId: stored.queueId, matchId: stored.matchId, stake: match.stake };
-        } catch (error: any) {
-          if (error?.status !== 404) throw error;
-          lastQueueContext = null;
-          removeContext(gameType);
-        }
+        try { const match = await this.getMatch(stored.matchId); if (match.status === "active" || match.status === "settled") return { status: "matched", queueId: stored.queueId, matchId: stored.matchId, stake: match.stake }; }
+        catch (error: any) { if (error?.status !== 404) throw error; lastQueueContext = null; removeContext(gameType); }
       }
       if (stored.queueId) {
         try {
           const result = await apiFetch<QueueResult>(`/api/v1/games/queue/${stored.queueId}`);
-          if (result.status === "matched" && result.matchId) {
-            writeContext({ ...stored, matchId: result.matchId, savedAt: Date.now() });
-            return result;
-          }
+          if (result.status === "matched" && result.matchId) { writeContext({ ...stored, matchId: result.matchId, savedAt: Date.now() }); return result; }
           if (result.status === "waiting") return result;
-          lastQueueContext = null;
-          removeContext(gameType);
-          return null;
-        } catch (error: any) {
-          if (error?.status !== 404) throw error;
-          lastQueueContext = null;
-          removeContext(gameType);
-        }
+          lastQueueContext = null; removeContext(gameType); return null;
+        } catch (error: any) { if (error?.status !== 404) throw error; lastQueueContext = null; removeContext(gameType); }
       }
     }
-
     if (gameType === "pvp_coinflip") {
       const result = await apiFetch<QueueResult>(`/api/v1/games/queue/recover?gameType=pvp_coinflip&stake=${encodeURIComponent(stake)}`);
       if (!result) return null;
-      if (result.queueId) {
-        const recovered: PersistedQueueContext = { gameType, stake: Number(result.stake ?? stake), queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) };
-        lastQueueContext = recovered;
-        writeContext(recovered);
-      }
+      if (result.queueId) { const recovered: PersistedQueueContext = { gameType, stake: Number(result.stake ?? stake), queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) }; lastQueueContext = recovered; writeContext(recovered); }
       return result.status === "cancelled" ? null : result;
     }
     return null;
@@ -159,43 +109,24 @@ export const gameMatchmakingService = {
     const effectiveQueueId = recoveredQueueIds.get(queueId) ?? queueId;
     try {
       const result = await apiFetch<QueueResult>(`/api/v1/games/queue/${effectiveQueueId}`);
-      if (result.status === "matched" && result.matchId) {
-        if (lastQueueContext) {
-          lastQueueContext = { ...lastQueueContext, queueId: result.queueId ?? effectiveQueueId, matchId: result.matchId, savedAt: Date.now() };
-          writeContext(lastQueueContext);
-        }
-        recoveredQueueIds.delete(queueId);
-      }
-      if (result.status === "cancelled") {
-        const gameType = lastQueueContext?.gameType ?? "pvp_coinflip";
-        lastQueueContext = null;
-        removeContext(gameType);
-      }
+      if (result.status === "matched" && result.matchId) { if (lastQueueContext) { lastQueueContext = { ...lastQueueContext, queueId: result.queueId ?? effectiveQueueId, matchId: result.matchId, savedAt: Date.now() }; writeContext(lastQueueContext); } recoveredQueueIds.delete(queueId); }
+      if (result.status === "cancelled") { const gameType = lastQueueContext?.gameType ?? "pvp_coinflip"; lastQueueContext = null; removeContext(gameType); }
       return result;
-    } catch (error: any) {
-      if (error?.status === 404) {
-        lastQueueContext = null;
-        removeContext("pvp_coinflip");
-      }
-      throw error;
-    }
+    } catch (error: any) { if (error?.status === 404) { lastQueueContext = null; removeContext("pvp_coinflip"); } throw error; }
   },
 
   async leaveQueue(queueId: string): Promise<void> {
     const effectiveQueueId = recoveredQueueIds.get(queueId) ?? queueId;
     await apiFetch(`/api/v1/games/queue/${effectiveQueueId}`, { method: "DELETE" });
     recoveredQueueIds.delete(queueId);
-    if (lastQueueContext?.queueId === effectiveQueueId) {
-      removeContext(lastQueueContext.gameType);
-      lastQueueContext = null;
-    }
+    if (lastQueueContext?.queueId === effectiveQueueId) { removeContext(lastQueueContext.gameType); lastQueueContext = null; }
   },
 
   async getMatch(matchId: string): Promise<MatchResult> { return apiFetch(`/api/v1/games/matches/${matchId}`); },
   async getGameConfig(gameType: string): Promise<GameConfig> { return apiFetch(`/api/v1/games/config/${encodeURIComponent(gameType)}`); },
   async signalReady(matchId: string): Promise<{ signalSentAt?: string; delayMs?: number; waiting?: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/ready`, { method: "POST", body: "{}" }); },
   async submitTap(matchId: string, tapMs: number): Promise<{ submitted: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/tap`, { method: "POST", body: JSON.stringify({ tapMs }) }); },
-  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake })); },
+  async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake }) }); },
   async getRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}`); },
   async joinRoom(code: string): Promise<PrivateRoom> { return apiFetch(`/api/v1/games/private-rooms/${code}/join`, { method: "POST", body: "{}" }); },
   async startMatch(code: string): Promise<{ matchId: string; room: PrivateRoom }> { return apiFetch(`/api/v1/games/private-rooms/${code}/start`, { method: "POST", body: "{}" }); },
