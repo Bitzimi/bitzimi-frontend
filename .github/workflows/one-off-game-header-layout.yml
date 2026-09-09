@@ -1,0 +1,171 @@
+name: One-off game header layout fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-headers:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply header layout
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          files = {
+              'src/app/pages/PvPCoinFlipGame.tsx': ('Coin Flip', 'stakeAmount', 'no-round'),
+              'src/app/pages/DiceDuelGame.tsx': ('Dice Clash', 'stake', 'no-round'),
+              'src/app/pages/DiceRoyaleGame.tsx': ('Dice Royale', 'initialStake', 'round'),
+              'src/app/pages/DiceArenaGame.tsx': ('Dice Arena', 'initialStake', 'round'),
+          }
+
+          button_rules = '''              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRules(!showRules)}
+                className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"
+              >
+                <Info className="h-4 w-4 mr-2" />
+                Rules
+              </Button>'''
+          button_fairness = '''              <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>'''
+
+          for filename, (title, stake_var, mode) in files.items():
+              p = Path(filename)
+              s = p.read_text()
+              start = s.find('/* [Title Row]')
+              if start < 0:
+                  raise SystemExit(f'{filename}: title-row marker not found')
+              end_marker = '/* Game Rules Panel */'
+              end = s.find(end_marker, start)
+              if end < 0:
+                  raise SystemExit(f'{filename}: game-rules marker not found')
+              block = s[start:end]
+              indent = '        '
+              if 'DiceDuelGame.tsx' in filename:
+                  indent = '          '
+              elif 'DiceRoyaleGame.tsx' in filename or 'DiceArenaGame.tsx' in filename:
+                  indent = '          '
+
+              if mode == 'no-round':
+                  new = f'''/* [Title Row] - Spin Battle-style two-row header */
+{indent}<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+{indent}  <div className="min-w-0 flex items-center gap-[6px]">
+{indent}    <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">{title}</h1>
+{indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {{formatCurrencyNoDecimals({stake_var})}}</span>
+{indent}  </div>
+{indent}  <div className="flex items-center justify-end">
+{indent}    {button_rules.strip()}
+{indent}  </div>
+{indent}  <div className="min-w-0 flex items-center gap-[6px]">
+{indent}    <span className="text-sm text-gray-500 whitespace-nowrap">{title} - Stake Room {{formatCurrencyNoDecimals({stake_var})}}</span>
+{indent}  </div>
+{indent}  <div className="flex items-center justify-end">
+{indent}    {button_fairness.strip()}
+{indent}  </div>
+{indent}</div>
+
+'''
+              else:
+                  new = f'''/* [Title Row] - Spin Battle-style two-row header */
+{indent}<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
+{indent}  <div className="min-w-0 flex items-center gap-[6px]">
+{indent}    <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">{title}</h1>
+{indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {{formatCurrencyNoDecimals({stake_var})}}</span>
+{indent}  </div>
+{indent}  <div className="flex items-center justify-end">
+{indent}    {button_rules.strip()}
+{indent}  </div>
+{indent}  <div className="min-w-0 flex items-center gap-2">
+{indent}    <span className="text-sm text-gray-500 whitespace-nowrap">Round #{{roundNumber}}</span>
+{indent}    <span className="inline-flex items-center gap-1 text-xs text-green-500 font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />LIVE</span>
+{indent}  </div>
+{indent}  <div className="flex items-center justify-end">
+{indent}    {button_fairness.strip()}
+{indent}  </div>
+{indent}</div>
+
+'''
+              s = s[:start] + new + s[end:]
+              p.write_text(s)
+
+          # Reaction Tap has no fairness button. Add the same two-row structure and keep Rules only.
+          p = Path('src/app/pages/ReactionTapGameRoom.tsx')
+          s = p.read_text()
+          # Locate the main game-room heading by its existing h1 and replace only its immediate header area.
+          marker = '<h1 className="text-xl font-bold'
+          pos = s.find(marker)
+          if pos < 0:
+              raise SystemExit('ReactionTapGameRoom.tsx: header heading not found')
+          # Find the nearest parent row before the heading and its closing block before the first main game card.
+          parent_start = s.rfind('<div', 0, pos)
+          game_area = s.find('Room Activity', pos)
+          if game_area < 0:
+              raise SystemExit('ReactionTapGameRoom.tsx: Room Activity marker not found')
+          # Only perform a targeted replacement if the existing header contains showRules.
+          header_prefix = s[parent_start:pos]
+          if 'showRules' not in s:
+              raise SystemExit('ReactionTapGameRoom.tsx: showRules state not found')
+          # Find a stable end just before the first large game-area container following the heading.
+          candidate_end = s.find('{/*', pos)
+          if candidate_end < 0:
+              raise SystemExit('ReactionTapGameRoom.tsx: header boundary not found')
+          # The current header is known to start at the enclosing div immediately before the h1 and contains the Rules button.
+          # Walk balanced div tags from parent_start until the matching outer div closes.
+          i = parent_start
+          depth = 0
+          in_tag = False
+          quote = None
+          while i < len(s):
+              if s.startswith('<div', i):
+                  depth += 1; i += 4; continue
+              if s.startswith('</div>', i):
+                  depth -= 1; i += 6
+                  if depth == 0:
+                      break
+                  continue
+              i += 1
+          if depth != 0:
+              raise SystemExit('ReactionTapGameRoom.tsx: could not find balanced header boundary')
+          end = i
+          replacement = '''<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center mb-6">
+  <div className="min-w-0 flex items-center gap-[6px]">
+    <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Tap</h1>
+    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+  </div>
+  <div className="flex items-center justify-end">
+    <Button variant="outline" size="sm" onClick={() => setShowRules(!showRules)} className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 rounded-lg transition-all shrink-0">
+      <Info className="h-4 w-4 mr-2" />
+      Rules
+    </Button>
+  </div>
+  <div className="min-w-0 flex items-center gap-[6px]">
+    <span className="text-sm text-gray-500 whitespace-nowrap">Reaction Tap - Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+  </div>
+</div>'''
+          s = s[:parent_start] + replacement + s[end:]
+          p.write_text(s)
+
+      - name: Validate changed files
+        run: |
+          git diff --check
+          npx tsc --noEmit --project tsconfig.json
+
+      - name: Commit source changes and remove one-off workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-off-game-header-layout.yml
+          git add src/app/pages/PvPCoinFlipGame.tsx src/app/pages/DiceDuelGame.tsx src/app/pages/DiceRoyaleGame.tsx src/app/pages/DiceArenaGame.tsx src/app/pages/ReactionTapGameRoom.tsx
+          git commit -m "fix: align game play headers with Spin Battle"
+          git push
