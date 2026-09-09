@@ -89,6 +89,7 @@ export default function ReactionTapGameRoom() {
   const [historyKey,       setHistoryKey]       = useState(0);
   const [walletAnimation,  setWalletAnimation]  = useState(false);
   const [showRules, setShowRules] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   // ── Refs ──────────────────────────────────────────────────────────────────────
   const signalSentAtRef  = useRef<number | null>(null); // unix ms from server
