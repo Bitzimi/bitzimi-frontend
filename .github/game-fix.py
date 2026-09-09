@@ -5,22 +5,13 @@ if "[game-fix-applied]" in subprocess.check_output(["git", "log", "-1", "--prett
     raise SystemExit(0)
 
 def replace(path, old, new):
-    p = Path(path)
-    s = p.read_text()
-    if old in s:
-        p.write_text(s.replace(old, new, 1))
-        return True
+    p = Path(path); s = p.read_text()
+    if old in s: p.write_text(s.replace(old, new, 1)); return True
     return False
 
-replace("src/app/pages/PvPCoinFlipGame.tsx",
-    "const totalPot   = stakeAmount * 2;\n    const feeAmount  = Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100));\n    const winnings   = totalPot - feeAmount;",
-    "const totalPot   = Number(md.totalPool ?? stakeAmount * 2);\n    const feeAmount  = Number(md.platformFee ?? 0);\n    const winnings   = Number(md.payout ?? 0);")
-replace("src/app/pages/PvPCoinFlipGame.tsx",
-    "  const winnerGets = totalPot * 0.9; // 90% after 10% platform fee",
-    "  const winnerGets = Number(matchData?.payout ?? 0);")
-replace("src/app/pages/DiceDuelGame.tsx",
-    "  const PLATFORM_FEE_PERCENT = 0.1; // 10%\n  const totalPool = stake * 2;\n  const platformFee = totalPool * PLATFORM_FEE_PERCENT;\n  const winnerPayout = totalPool - platformFee;",
-    "  const totalPool = Number(matchData?.totalPool ?? stake * 2);\n  const platformFee = Number(matchData?.platformFee ?? 0);\n  const winnerPayout = Number(matchData?.payout ?? 0);")
+replace("src/app/pages/PvPCoinFlipGame.tsx", "const totalPot   = stakeAmount * 2;\n    const feeAmount  = Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100));\n    const winnings   = totalPot - feeAmount;", "const totalPot   = Number(md.totalPool ?? stakeAmount * 2);\n    const feeAmount  = Number(md.platformFee ?? 0);\n    const winnings   = Number(md.payout ?? 0);")
+replace("src/app/pages/PvPCoinFlipGame.tsx", "  const winnerGets = totalPot * 0.9; // 90% after 10% platform fee", "  const winnerGets = Number(matchData?.payout ?? 0);")
+replace("src/app/pages/DiceDuelGame.tsx", "  const PLATFORM_FEE_PERCENT = 0.1; // 10%\n  const totalPool = stake * 2;\n  const platformFee = totalPool * PLATFORM_FEE_PERCENT;\n  const winnerPayout = totalPool - platformFee;", "  const totalPool = Number(matchData?.totalPool ?? stake * 2);\n  const platformFee = Number(matchData?.platformFee ?? 0);\n  const winnerPayout = Number(matchData?.payout ?? 0);")
 
 rp = Path("src/app/pages/ReactionTapGameRoom.tsx")
 s = rp.read_text()
@@ -88,13 +79,13 @@ extra = r'''
 }
 '''
 current = css.read_text()
-if "Game header alignment: Coin Flip / Dice Clash." not in current:
-    css.write_text(current + extra)
+if "Game header alignment: Coin Flip / Dice Clash." not in current: css.write_text(current + extra)
 
 subprocess.run(["git", "config", "user.name", "github-actions[bot]"])
 subprocess.run(["git", "config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com"])
 subprocess.run(["git", "add", "src/app/pages/PvPCoinFlipGame.tsx", "src/app/pages/DiceDuelGame.tsx", "src/app/pages/ReactionTapGameRoom.tsx", "src/app/styles/globals.css"])
-if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode == 0:
-    raise SystemExit(0)
+if subprocess.run(["git", "diff", "--cached", "--quiet"]).returncode == 0: raise SystemExit(0)
 subprocess.run(["git", "commit", "-m", "fix: apply game payout and header corrections [game-fix-applied]"], check=True)
-subprocess.run(["git", "push"], check=True)
+branch = f"game-fix-{subprocess.check_output(['git','rev-parse','--short','HEAD'], text=True).strip()}"
+subprocess.run(["git", "push", "origin", f"HEAD:refs/heads/{branch}"], check=True)
+subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", "fix: game payout and header corrections", "--body", "Applies authoritative payout display, Reaction Tap rules/wallet layout, and Coin Flip/Dice Clash header alignment."], check=True)
