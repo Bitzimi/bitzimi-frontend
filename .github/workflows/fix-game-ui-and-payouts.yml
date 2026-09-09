@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   patch:
@@ -14,4 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Apply corrections
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 .github/game-fix.py
