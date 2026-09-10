@@ -13,7 +13,6 @@ function replaceSection(path, marker, endMarker, replacement) {
 }
 
 for (const [path, title, stake, indent] of [
-  ["src/app/pages/PvPCoinFlipGame.tsx", "Coin Flip", "stakeAmount", "        "],
   ["src/app/pages/DiceDuelGame.tsx", "Dice Clash", "stake", "          "],
 ]) {
   const replacement = `/* [Title Row] - Spin Battle-style two-row header */
