@@ -36,6 +36,8 @@ export default function PvPCoinFlipGame() {
   const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
   const [playerSide, setPlayerSide] = useState<CoinSide | null>(null);
   const [opponentSide, setOpponentSide] = useState<CoinSide | null>(null);
+  const [animationElapsedMs, setAnimationElapsedMs] = useState(0);
+  const [animationDurationMs, setAnimationDurationMs] = useState(8000);
   const [showWinner, setShowWinner] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const [showRules, setShowRules] = useState(false);
@@ -58,7 +60,7 @@ export default function PvPCoinFlipGame() {
     finally { setHistoryLoading(false); }
   }, [stakeAmount]);
 
-  const loadMatch = useCallback(async (id: string, animate: boolean) => {
+  const loadMatch = useCallback(async (id: string, _animate: boolean) => {
     const match = await gameMatchmakingService.getMatch(id);
     setMatchData(match);
     setCoinResult((match.result?.coinFlip as CoinSide) ?? null);
@@ -67,26 +69,38 @@ export default function PvPCoinFlipGame() {
     setPlayerSide(mine ?? null);
     setOpponentSide(opponent ?? null);
 
-    // A recovered settled match is rendered as an immutable result. It is never
-    // replayed as a new game and never creates a frontend transaction/history row.
-    if (match.status === "settled" && match.result?.coinFlip && !animate) {
+    const animationStart = Date.parse(match.animationStartAt ?? "");
+    const duration = Number(match.animationDurationMs ?? 8000);
+    const serverNow = Date.parse(match.serverNow ?? "");
+    const clockOffset = Number.isFinite(serverNow) ? serverNow - Date.now() : 0;
+    const authoritativeNow = Date.now() + clockOffset;
+    const elapsed = Number.isFinite(animationStart) ? authoritativeNow - animationStart : 0;
+    const clampedElapsed = Math.max(0, Math.min(duration, elapsed));
+    setAnimationDurationMs(duration);
+    setAnimationElapsedMs(clampedElapsed);
+
+    // The backend owns the match timeline. A reload/reconnect resumes from the
+    // current server-clock position instead of replaying the animation from zero.
+    if (!match.result?.coinFlip) { setGameState("matched"); return; }
+    if (elapsed >= duration) {
       setGameState("showing_result");
       setShowWinner(true);
       return;
     }
-    if (!match.result?.coinFlip) { setGameState("matched"); return; }
 
-    const animationStart = Date.parse(match.animationStartAt ?? "");
-    const duration = Number(match.animationDurationMs ?? 2500);
-    const wait = Number.isFinite(animationStart) ? Math.max(0, animationStart - Date.now()) : 0;
-    setGameState("side_assignment");
+    const wait = Number.isFinite(animationStart) ? Math.max(0, animationStart - authoritativeNow) : 0;
+    setGameState(wait > 0 ? "side_assignment" : "flipping");
     timersRef.current.push(setTimeout(() => {
       if (presentedMatchId.current === match.matchId) return;
       presentedMatchId.current = match.matchId;
-      const elapsed = Number.isFinite(animationStart) ? Math.max(0, Date.now() - animationStart) : 0;
-      if (elapsed >= duration) { setGameState("showing_result"); setShowWinner(true); return; }
+      const liveServerNow = Date.parse(match.serverNow ?? "");
+      const liveOffset = Number.isFinite(liveServerNow) ? liveServerNow - Date.now() : clockOffset;
+      const liveNow = Date.now() + liveOffset;
+      const liveElapsed = Number.isFinite(animationStart) ? Math.max(0, liveNow - animationStart) : 0;
+      if (liveElapsed >= duration) { setAnimationElapsedMs(duration); setGameState("showing_result"); setShowWinner(true); return; }
+      setAnimationElapsedMs(liveElapsed);
       setGameState("flipping");
-      timersRef.current.push(setTimeout(() => { setGameState("showing_result"); setShowWinner(true); }, duration - elapsed));
+      timersRef.current.push(setTimeout(() => { setAnimationElapsedMs(duration); setGameState("showing_result"); setShowWinner(true); }, duration - liveElapsed));
     }, wait));
   }, []);
 
@@ -94,7 +108,7 @@ export default function PvPCoinFlipGame() {
     if (searchInFlight.current) return;
     searchInFlight.current = true;
     clearPolling(); clearTimers();
-    setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchData(null); setQueueId(null); setGameState("searching");
+    setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchData(null); setQueueId(null); setAnimationElapsedMs(0); setGameState("searching");
     try {
       const result = await gameMatchmakingService.joinQueue("pvp_coinflip", stakeAmount);
       if (result.status === "matched" && result.matchId) { await loadMatch(result.matchId, true); return; }
@@ -160,7 +174,7 @@ export default function PvPCoinFlipGame() {
   }, [gameState, matchData?.status, refreshWalletsFromBackend, loadHistory]);
 
   const handleExit = () => { clearPolling(); clearTimers(); searchInFlight.current = false; navigate(roomCode ? `/game/pvp-coinflip/private?roomCode=${roomCode}&stake=${stakeAmount}` : "/game/pvp-coinflip"); };
-  const handleNewSearch = async () => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchData(null); presentedMatchId.current = null; searchInFlight.current = false; setGameState("ready"); await startSearch(); };
+  const handleNewSearch = async () => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchData(null); setAnimationElapsedMs(0); presentedMatchId.current = null; searchInFlight.current = false; setGameState("ready"); await startSearch(); };
 
   const opponent = matchData?.opponent;
   const totalPool = Number(matchData?.totalPool ?? stakeAmount * 2);
@@ -184,8 +198,8 @@ export default function PvPCoinFlipGame() {
         {gameState === "searching" && <div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" /><div className="text-base text-gray-300">Searching for opponent...</div></div>}
         {gameState === "matched" && <div className="text-center"><div className="text-4xl mb-3">✓</div><div className="text-lg text-green-400 font-semibold">Opponent Found!</div><div className="text-sm text-gray-400 mt-2">vs {opponent?.username ?? "Opponent"}</div></div>}
         {gameState === "side_assignment" && <div className="text-center"><div className="text-xl font-bold text-amber-400 mb-6">Sides Assigned!</div><div className="flex justify-center items-center gap-6 md:gap-10 mb-6"><div className="flex flex-col items-center"><div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden mb-3"><PlayerAvatar avatar={identity.avatar} /></div><div className="text-sm font-semibold text-blue-400 mb-2">{identity.username}</div><div className="text-2xl font-bold bg-blue-700 px-5 py-2.5 rounded-xl border-2 border-blue-400">{playerSide?.toUpperCase()}</div></div><div className="text-3xl font-bold text-gray-400">VS</div><div className="flex flex-col items-center"><div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden mb-3"><PlayerAvatar avatar={opponent?.avatar ?? "P"} /></div><div className="text-sm font-semibold text-red-400 mb-2">{opponent?.username ?? "Opponent"}</div><div className="text-2xl font-bold bg-red-700 px-5 py-2.5 rounded-xl border-2 border-red-400">{opponentSide?.toUpperCase()}</div></div></div><div className="text-sm text-gray-400 animate-pulse">Preparing to flip...</div></div>}
-        {gameState === "flipping" && <div className="text-center"><ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} /><div className="text-base text-gray-300 mt-4">Flipping...</div></div>}
-        {gameState === "showing_result" && <div className="text-center"><ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={false} /><div className="text-2xl font-bold text-amber-400 mt-4 mb-6">{coinResult?.toUpperCase()}</div>{showWinner && <div><div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden mx-auto mb-3"><PlayerAvatar avatar={matchData?.youWon ? identity.avatar : opponent?.avatar ?? "P"} /></div><div className={`text-xl md:text-2xl font-bold ${matchData?.youWon ? "text-blue-400" : "text-red-400"}`}>{matchData?.youWon ? identity.username : opponent?.username}</div><div className="text-sm text-gray-400 mt-1">WINS</div></div>}</div>}
+        {gameState === "flipping" && <div className="text-center"><ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} animationElapsedMs={animationElapsedMs} animationDurationMs={animationDurationMs} /><div className="text-base text-gray-300 mt-4">Flipping...</div></div>}
+        {gameState === "showing_result" && <div className="text-center"><ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={false} animationElapsedMs={animationDurationMs} animationDurationMs={animationDurationMs} /><div className="text-2xl font-bold text-amber-400 mt-4 mb-6">{coinResult?.toUpperCase()}</div>{showWinner && <div><div className="w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden mx-auto mb-3"><PlayerAvatar avatar={matchData?.youWon ? identity.avatar : opponent?.avatar ?? "P"} /></div><div className={`text-xl md:text-2xl font-bold ${matchData?.youWon ? "text-blue-400" : "text-red-400"}`}>{matchData?.youWon ? identity.username : opponent?.username}</div><div className="text-sm text-gray-400 mt-1">WINS</div></div>}</div>}
       </div>
     </div></Card>
 
