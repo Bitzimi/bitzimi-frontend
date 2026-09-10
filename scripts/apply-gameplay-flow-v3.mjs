@@ -17,9 +17,9 @@ const write = (p, s) => fs.writeFileSync(p, s);
   if (!s.includes('Search as SearchIcon')) {
     s = s.replace('import { ArrowLeft, Info, Shield } from "lucide-react";', 'import { ArrowLeft, Info, Shield, Search as SearchIcon } from "lucide-react";');
   }
-  const oldSearch = '{gameState === "ready" && (\n              <div className="text-center">\n                <Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button>\n              </div>\n            )}';
+  const searchBlock = /\{gameState === "(?:idle|ready)" && \(\s*<div className="text-center">\s*<Button onClick=\{\(\) => setGameState\("searching"\)\} className="px-10 py-5 text-lg">Search<\/Button>\s*<\/div>\s*\)\}/;
   const newSearch = '{gameState === "ready" && (\n              <div className="text-center">\n                <Button\n                  onClick={startSearch}\n                  variant="outline"\n                  className="h-8 px-3 rounded-full bg-transparent !bg-transparent border-gray-400/70 dark:border-gray-600/70 text-sm font-medium text-gray-700 dark:text-gray-300 hover:!bg-transparent"\n                >\n                  <SearchIcon className="h-3.5 w-3.5 mr-1.5" />\n                  Search\n                </Button>\n                <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">Stake are deducted when opponent is found</div>\n              </div>\n            )}';
-  s = s.replace(oldSearch, newSearch);
+  s = s.replace(searchBlock, newSearch);
   write(p, s);
 }
 
