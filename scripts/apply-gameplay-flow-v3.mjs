@@ -14,7 +14,10 @@ const write = (p, s) => fs.writeFileSync(p, s);
     const marker = '  const myUsername = identity.username;';
     s = s.replace(marker, `${marker}\n\n  useEffect(() => { gameMatchmakingService.getGameConfig("pvp_coinflip").then(c => setFeeRate(Number(c.feeRate) || 0)).catch(() => {}); }, []);`);
   }
-  s = s.replace('{gameState === "idle" && (\n              <div className="text-center">\n                <Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button>\n              </div>\n            )}', '{gameState === "ready" && (\n              <div className="text-center">\n                <Button onClick={startSearch} className="px-10 py-5 text-lg">Search</Button>\n                <div className="text-xs text-gray-500 mt-3">Your stake is deducted when you start searching.</div>\n              </div>\n            )}');
+  if (!s.includes('Search as SearchIcon')) {
+    s = s.replace('import { ArrowLeft, Info, Shield } from "lucide-react";', 'import { ArrowLeft, Info, Shield, Search as SearchIcon } from "lucide-react";');
+  }
+  s = s.replace('{gameState === "idle" && (\n              <div className="text-center">\n                <Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button>\n              </div>\n            )}', '{gameState === "ready" && (\n              <div className="text-center">\n                <Button\n                  onClick={startSearch}\n                  variant="outline"\n                  className="h-8 px-3 rounded-full bg-transparent border-gray-400/70 dark:border-gray-600/70 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/10 dark:hover:bg-gray-800/20"\n                >\n                  <SearchIcon className="h-3.5 w-3.5 mr-1.5" />\n                  Search\n                </Button>\n              </div>\n            )}');
   write(p, s);
 }
 
