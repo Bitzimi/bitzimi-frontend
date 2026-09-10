@@ -3,7 +3,7 @@ import fs from "node:fs";
 const path = "src/app/pages/PvPCoinFlipGame.tsx";
 let s = fs.readFileSync(path, "utf8");
 
-if (!s.includes("animationElapsedMs")) {
+if (!s.includes('const [animationElapsedMs, setAnimationElapsedMs]')) {
   s = s.replace(
     'const [fairnessData,  setFairnessData]  = useState<FairnessData | null>(null);',
     'const [fairnessData,  setFairnessData]  = useState<FairnessData | null>(null);\n  const [animationElapsedMs, setAnimationElapsedMs] = useState(0);\n  const [animationDurationMs, setAnimationDurationMs] = useState(8000);'
