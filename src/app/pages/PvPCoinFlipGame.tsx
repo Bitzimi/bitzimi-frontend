@@ -284,8 +284,10 @@ export default function PvPCoinFlipGame() {
   <Info className="h-4 w-4 mr-2" />
   Rules
 </Button></div>
+          <div className="col-start-1 flex items-center justify-start">
+            <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
+          </div>
           <div></div>
-          <div className="flex items-center justify-end"><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button></div>
         </div>
 
 /* Game Rules Panel */}
