@@ -1,0 +1,40 @@
+name: One-time Coin Flip fairness placement fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-coinflip-fairness-placement.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'fix Coin Flip Verify Fairness placement') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact UI-only placement change
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/pages/PvPCoinFlipGame.tsx')
+          s = p.read_text()
+          old = '''          <div className="flex items-center justify-end"><Button\n  variant="outline"\n  size="sm"\n  onClick={() => setShowRules(!showRules)}\n  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"\n>\n  <Info className="h-4 w-4 mr-2" />\n  Rules\n</Button></div>\n          <div></div>\n          <div className="flex items-center justify-end"><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button></div>'''
+          new = '''          <div className="flex items-center justify-end"><Button\n  variant="outline"\n  size="sm"\n  onClick={() => setShowRules(!showRules)}\n  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"\n>\n  <Info className="h-4 w-4 mr-2" />\n  Rules\n</Button></div>\n          <div className="col-start-1 flex items-center justify-start">\n            <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>\n          </div>\n          <div></div>'''
+          if old not in s:
+              raise SystemExit('Expected Coin Flip header markup was not found; refusing to modify anything.')
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly one header match, found {s.count(old)}; refusing to modify anything.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit UI-only change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/PvPCoinFlipGame.tsx
+          git diff --cached --check
+          git diff --cached -- src/app/pages/PvPCoinFlipGame.tsx
+          git commit -m "fix Coin Flip Verify Fairness placement"
+          git push
