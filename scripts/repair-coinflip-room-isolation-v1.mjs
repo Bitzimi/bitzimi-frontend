@@ -1,0 +1,12 @@
+import fs from "node:fs";
+const path = "src/app/services/gameMatchmakingService.ts";
+let s = fs.readFileSync(path, "utf8");
+s = s.replace('let lastQueueContext:{gameType:MatchGameType;stake:number;queueId:string}|null=null;\n','');
+s = s.replace('const recoveredQueueIds=new Map<string,string>();','const recoveredQueueIds=new Map<string,string>();\nconst queueContexts=new Map<string,{gameType:MatchGameType;stake:number}>();');
+s = s.replace('if(result.queueId)lastQueueContext={gameType,stake,queueId:result.queueId};return result;','if(result.queueId)queueContexts.set(result.queueId,{gameType,stake});return result;');
+s = s.replace('if(result.status==="cancelled"&&lastQueueContext){const replacement=await this.joinQueue(lastQueueContext.gameType,lastQueueContext.stake);','if(result.status==="cancelled"&&queueContexts.has(queueId)){const ctx=queueContexts.get(queueId)!;const replacement=await this.joinQueue(ctx.gameType,ctx.stake);');
+s = s.replace('if(result.status==="matched"&&result.matchId){lastQueueContext=null;recoveredQueueIds.delete(queueId);}','if(result.status==="matched"&&result.matchId){queueContexts.delete(queueId);recoveredQueueIds.delete(queueId);}');
+s = s.replace('if(error?.status===404&&lastQueueContext){const replacement=await this.joinQueue(lastQueueContext.gameType,lastQueueContext.stake);','if(error?.status===404&&queueContexts.has(queueId)){const ctx=queueContexts.get(queueId)!;const replacement=await this.joinQueue(ctx.gameType,ctx.stake);');
+s = s.replace('recoveredQueueIds.delete(queueId);if(lastQueueContext?.queueId===effectiveQueueId)lastQueueContext=null;','recoveredQueueIds.delete(queueId);queueContexts.delete(queueId);');
+fs.writeFileSync(path, s);
+console.log("Coin Flip frontend queue context isolated per queue/stake");
