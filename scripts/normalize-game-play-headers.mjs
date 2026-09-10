@@ -1,7 +1,7 @@
 import fs from "node:fs";
 
 const rules = `<Button\n  variant="outline"\n  size="sm"\n  onClick={() => setShowRules(!showRules)}\n  className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0"\n>\n  <Info className="h-4 w-4 mr-2" />\n  Rules\n</Button>`;
-const fairness = `<Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>`;
+const fairness = `<Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"> <Shield className="h-3.5 w-3.5" />Verify Fairness</Button>`;
 
 function replaceSection(path, marker, endMarker, replacement) {
   const s = fs.readFileSync(path, "utf8");
@@ -16,6 +16,9 @@ for (const [path, title, stake, indent] of [
   ["src/app/pages/PvPCoinFlipGame.tsx", "Coin Flip", "stakeAmount", "        "],
   ["src/app/pages/DiceDuelGame.tsx", "Dice Clash", "stake", "          "],
 ]) {
+  const fairnessPlacement = path.includes("PvPCoinFlipGame")
+    ? `${indent}  <div className="flex items-center justify-start">${fairness}</div>`
+    : `${indent}  <div></div>\n${indent}  <div className="flex items-center justify-end">${fairness}</div>`;
   const replacement = `/* [Title Row] - Spin Battle-style two-row header */
 ${indent}<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
 ${indent}  <div className="min-w-0 flex items-center gap-[6px]">
@@ -23,8 +26,7 @@ ${indent}    <h1 className="text-xl font-bold text-gray-900 dark:text-white whit
 ${indent}    <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room \{formatCurrencyNoDecimals(${stake})\}</span>
 ${indent}  </div>
 ${indent}  <div className="flex items-center justify-end">${rules}</div>
-${indent}  <div></div>
-${indent}  <div className="flex items-center justify-end">${fairness}</div>
+${fairnessPlacement}
 ${indent}</div>
 
 `;
