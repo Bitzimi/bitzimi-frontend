@@ -26,39 +26,29 @@ async function apiFetch<T>(path: string, options?: RequestInit, retry = true): P
     const refreshed = await refreshBackendToken();
     if (refreshed) return apiFetch<T>(path, options, false);
   }
-
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeader(),
-      ...(options?.headers ?? {}),
-    },
+    headers: { "Content-Type": "application/json", ...getAuthHeader(), ...(options?.headers ?? {}) },
   });
-
   const json = await res.json().catch(() => ({}));
-
   if (res.status === 401 && retry && !path.includes("/auth/refresh")) {
     const refreshed = await refreshBackendToken();
     if (refreshed) return apiFetch<T>(path, options, false);
   }
-
   if (!res.ok) {
     const message = json?.error?.message ?? "API error";
     const code = json?.error?.code;
-    throw Object.assign(new Error(code === "UNAUTHORIZED" ? "Your session has expired. Please log in again." : message), {
-      code,
-      status: res.status,
-    });
+    throw Object.assign(new Error(code === "UNAUTHORIZED" ? "Your session has expired. Please log in again." : message), { code, status: res.status });
   }
   return json.data as T;
 }
 
 export type MatchGameType = "dice_clash" | "pvp_coinflip" | "reaction_tap";
-export interface QueueResult { status: "waiting" | "matched" | "cancelled"; queueId?: string; matchId?: string; stake?: number; }
+export interface QueueResult { status: "waiting" | "matched" | "cancelled"; queueId?: string; matchId?: string; stake?: number; matchStatus?: "active" | "settled" | "cancelled"; }
 export interface GameConfig { gameType: string; feeRate: number; feePercent: number; stakes: number[]; }
 export interface PrivateRoom { id: string; code: string; gameType: string; stake: number; hostId: string; guestId: string | null; status: "waiting" | "ready" | "active" | "rematch" | "completed" | "cancelled"; currentMatchId: string | null; rematchHostReady: boolean; rematchGuestReady: boolean; createdAt: string; expiresAt: string; host: { id: string; profile: { username: string; avatarUrl: string | null } | null }; guest: { id: string; profile: { username: string; avatarUrl: string | null } | null } | null; }
 export interface MatchResult { matchId: string; gameType: string; stake: number; totalPool: number; platformFee: number; status: "active" | "settled" | "cancelled"; opponent: { username: string; userId: string; avatar?: string | null }; result: Record<string, any> | null; winnerId: string | null; youWon: boolean; payout: number; createdAt: string; settledAt: string | null; signalSentAt: string | null; yourReady: boolean; opponentReady: boolean; serverNow?: string; animationStartAt?: string; animationDurationMs?: number; }
+export interface CoinFlipHistoryItem { matchId: string; stake: number; totalPool: number; platformFee: number; result: "heads" | "tails" | null; youWon: boolean; payout: number; opponent: { username: string; userId: string; avatar?: string | null }; createdAt: string; settledAt: string | null; }
 
 type PersistedQueueContext = { gameType: MatchGameType; stake: number; queueId?: string; matchId?: string; savedAt: number };
 const QUEUE_CONTEXT_PREFIX = "bitzimi:matchmaking:";
@@ -73,11 +63,19 @@ const recoveredQueueIds = new Map<string, string>();
 export const gameMatchmakingService = {
   async joinQueue(gameType: MatchGameType, stake: number): Promise<QueueResult> {
     const result = await apiFetch<QueueResult>("/api/v1/games/queue", { method: "POST", body: JSON.stringify({ gameType, stake }) });
-    if (result.queueId) { lastQueueContext = { gameType, stake, queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) }; writeContext(lastQueueContext); }
+    // Coin Flip has no browser queue state. The backend is the only source of truth.
+    if (gameType !== "pvp_coinflip" && result.queueId) {
+      lastQueueContext = { gameType, stake, queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) };
+      writeContext(lastQueueContext);
+    }
     return result;
   },
 
   async recoverQueue(gameType: MatchGameType, stake: number): Promise<QueueResult | null> {
+    if (gameType === "pvp_coinflip") {
+      const result = await apiFetch<QueueResult>(`/api/v1/games/queue/recover?gameType=pvp_coinflip&stake=${encodeURIComponent(stake)}`);
+      return result?.status === "cancelled" ? null : result;
+    }
     const stored = readContext(gameType);
     if (stored && Number(stored.stake) === Number(stake)) {
       lastQueueContext = stored;
@@ -94,36 +92,31 @@ export const gameMatchmakingService = {
         } catch (error: any) { if (error?.status !== 404) throw error; lastQueueContext = null; removeContext(gameType); }
       }
     }
-    if (gameType === "pvp_coinflip") {
-      const result = await apiFetch<QueueResult>(`/api/v1/games/queue/recover?gameType=pvp_coinflip&stake=${encodeURIComponent(stake)}`);
-      if (!result) return null;
-      if (result.queueId) { const recovered: PersistedQueueContext = { gameType, stake: Number(result.stake ?? stake), queueId: result.queueId, savedAt: Date.now(), ...(result.matchId ? { matchId: result.matchId } : {}) }; lastQueueContext = recovered; writeContext(recovered); }
-      return result.status === "cancelled" ? null : result;
-    }
     return null;
   },
 
-  clearQueueContext(gameType: MatchGameType) { lastQueueContext = null; recoveredQueueIds.clear(); removeContext(gameType); },
+  clearQueueContext(gameType: MatchGameType) { lastQueueContext = null; recoveredQueueIds.clear(); if (gameType !== "pvp_coinflip") removeContext(gameType); },
 
   async pollQueue(queueId: string): Promise<QueueResult> {
     const effectiveQueueId = recoveredQueueIds.get(queueId) ?? queueId;
     try {
       const result = await apiFetch<QueueResult>(`/api/v1/games/queue/${effectiveQueueId}`);
-      if (result.status === "matched" && result.matchId) { if (lastQueueContext) { lastQueueContext = { ...lastQueueContext, queueId: result.queueId ?? effectiveQueueId, matchId: result.matchId, savedAt: Date.now() }; writeContext(lastQueueContext); } recoveredQueueIds.delete(queueId); }
-      if (result.status === "cancelled") { const gameType = lastQueueContext?.gameType ?? "pvp_coinflip"; lastQueueContext = null; removeContext(gameType); }
+      if (result.status === "matched" && result.matchId) { if (lastQueueContext && lastQueueContext.gameType !== "pvp_coinflip") { lastQueueContext = { ...lastQueueContext, queueId: result.queueId ?? effectiveQueueId, matchId: result.matchId, savedAt: Date.now() }; writeContext(lastQueueContext); } recoveredQueueIds.delete(queueId); }
+      if (result.status === "cancelled") { const gameType = lastQueueContext?.gameType; lastQueueContext = null; if (gameType && gameType !== "pvp_coinflip") removeContext(gameType); }
       return result;
-    } catch (error: any) { if (error?.status === 404) { lastQueueContext = null; removeContext("pvp_coinflip"); } throw error; }
+    } catch (error: any) { if (error?.status === 404) { lastQueueContext = null; } throw error; }
   },
 
   async leaveQueue(queueId: string): Promise<void> {
     const effectiveQueueId = recoveredQueueIds.get(queueId) ?? queueId;
     await apiFetch(`/api/v1/games/queue/${effectiveQueueId}`, { method: "DELETE" });
     recoveredQueueIds.delete(queueId);
-    if (lastQueueContext?.queueId === effectiveQueueId) { removeContext(lastQueueContext.gameType); lastQueueContext = null; }
+    if (lastQueueContext?.queueId === effectiveQueueId && lastQueueContext.gameType !== "pvp_coinflip") { removeContext(lastQueueContext.gameType); lastQueueContext = null; }
   },
 
   async getMatch(matchId: string): Promise<MatchResult> { return apiFetch(`/api/v1/games/matches/${matchId}`); },
   async getGameConfig(gameType: string): Promise<GameConfig> { return apiFetch(`/api/v1/games/config/${encodeURIComponent(gameType)}`); },
+  async getCoinFlipHistory(stake?: number): Promise<CoinFlipHistoryItem[]> { const qs = stake === undefined ? "" : `?stake=${encodeURIComponent(stake)}`; return apiFetch(`/api/v1/games/coinflip/history${qs}`); },
   async signalReady(matchId: string): Promise<{ signalSentAt?: string; delayMs?: number; waiting?: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/ready`, { method: "POST", body: "{}" }); },
   async submitTap(matchId: string, tapMs: number): Promise<{ submitted: boolean }> { return apiFetch(`/api/v1/games/matches/${matchId}/tap`, { method: "POST", body: JSON.stringify({ tapMs }) }); },
   async createRoom(gameType: MatchGameType, stake: number): Promise<PrivateRoom> { return apiFetch("/api/v1/games/private-rooms", { method: "POST", body: JSON.stringify({ gameType, stake }) }); },
