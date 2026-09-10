@@ -7,35 +7,137 @@ interface ProfessionalGoldCoinProps {
   animationDurationMs?: number;
 }
 
-export function ProfessionalGoldCoin({ side, isAnimating = false, animationElapsedMs = 0, animationDurationMs = 2500 }: ProfessionalGoldCoinProps) {
+/**
+ * Presentation-only coin. The displayed side is supplied by the backend-authoritative
+ * match result; this component never chooses an outcome.
+ */
+export function ProfessionalGoldCoin({
+  side,
+  isAnimating = false,
+  animationElapsedMs = 0,
+  animationDurationMs = 8000,
+}: ProfessionalGoldCoinProps) {
   const label = side === "heads" ? "HEADS" : "TAILS";
   const mark = side === "heads" ? "B" : "Z";
 
+  const animationStyle = isAnimating
+    ? {
+        animation: `flipCoin ${animationDurationMs}ms cubic-bezier(.12,.72,.18,1) 1 both`,
+        animationDelay: `-${Math.max(0, animationElapsedMs)}ms`,
+        animationFillMode: "both" as const,
+      }
+    : { transform: "rotateX(0deg) rotateY(0deg)" };
+
   return (
-    <div className={`relative w-52 h-52 md:w-64 md:h-64 ${isAnimating ? "inline-block" : ""}`} style={{ perspective: "1400px" }} aria-label={`Coin showing ${label}`}>
-      <div className="absolute left-1/2 top-[56%] w-[76%] h-[20%] -translate-x-1/2 rounded-full" style={{ background: "rgba(0,0,0,.62)", filter: "blur(15px)" }} />
-      <div className="absolute left-1/2 top-1/2 w-[92%] h-[92%] -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ background: "radial-gradient(circle, rgba(255,211,73,.30), rgba(255,211,73,0) 68%)", filter: "blur(20px)" }} />
+    <div
+      className="relative w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72"
+      style={{ perspective: "1800px" }}
+      aria-label={`Coin showing ${label}`}
+    >
+      {/* Ambient glow and grounded shadow */}
+      <div
+        className="absolute left-1/2 top-[57%] w-[72%] h-[17%] -translate-x-1/2 rounded-full"
+        style={{ background: "rgba(0,0,0,.72)", filter: "blur(18px)" }}
+      />
+      <div
+        className="absolute inset-[3%] rounded-full"
+        style={{
+          background: "radial-gradient(circle, rgba(255,214,86,.34), rgba(255,184,0,.08) 42%, transparent 70%)",
+          filter: "blur(24px)",
+        }}
+      />
 
-      <div className="relative w-full h-full rounded-full" style={{ transformStyle: "preserve-3d", ...(isAnimating ? { animation: `flipCoin ${animationDurationMs}ms cubic-bezier(.22,.61,.36,1) 1 both`, animationDelay: `-${Math.max(0, animationElapsedMs)}ms`, animationFillMode: "both" } : { transform: "rotateX(0deg) rotateY(0deg)" }) }}>
-        <div className="absolute inset-[2%] rounded-full" style={{ background: "linear-gradient(180deg, #6f4300 0%, #3c2200 22%, #1f1200 52%, #6b4100 78%, #c18a1a 100%)", boxShadow: "0 24px 38px rgba(0,0,0,.60), inset 0 -5px 8px rgba(0,0,0,.65)", transform: "translate3d(0, 8px, -8px)" }} />
+      <div className="relative h-full w-full" style={{ transformStyle: "preserve-3d", ...animationStyle }}>
+        {/* Dark-gold edge behind the face creates real thickness */}
+        <div
+          className="absolute inset-[1.5%] rounded-full"
+          style={{
+            background: "linear-gradient(180deg,#fff1a3 0%,#b87808 9%,#5b3400 26%,#2a1700 51%,#6b3e00 76%,#d39b24 94%,#fff0a0 100%)",
+            boxShadow: "0 30px 50px rgba(0,0,0,.68), inset 0 -7px 11px rgba(0,0,0,.72), inset 0 3px 4px rgba(255,255,255,.8)",
+            transform: "translate3d(0,10px,-10px)",
+          }}
+        />
 
-        <div className="absolute inset-[1%] rounded-full" style={{ background: "linear-gradient(180deg, #fff8c5 0%, #f4cf58 8%, #c58a13 20%, #6e4300 42%, #3e2500 53%, #a76d08 75%, #e7b93d 91%, #fff2a5 100%)", boxShadow: "0 28px 46px rgba(0,0,0,.55), inset 0 2px 3px rgba(255,255,255,.9), inset 0 -10px 15px rgba(45,25,0,.70), 0 0 42px rgba(245,193,55,.20)", transform: "translateZ(0)" }}>
-          <div className="absolute inset-[1.5%] rounded-full" style={{ background: "repeating-conic-gradient(from 0deg, rgba(67,39,0,.70) 0deg 1.1deg, rgba(255,236,143,.62) 1.1deg 2.2deg, transparent 2.2deg 3.8deg)", WebkitMaskImage: "radial-gradient(circle, transparent 0 82%, #000 83% 100%)", maskImage: "radial-gradient(circle, transparent 0 82%, #000 83% 100%)" }} />
+        {/* Outer milled rim */}
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: "linear-gradient(145deg,#fff8c8 0%,#f1c94e 7%,#9d6508 20%,#4c2a00 42%,#7e4d03 58%,#d79f24 84%,#fff2a7 100%)",
+            boxShadow: "0 25px 45px rgba(0,0,0,.58), inset 0 2px 5px rgba(255,255,255,.95), inset 0 -12px 18px rgba(38,20,0,.75)",
+            transform: "translateZ(0)",
+          }}
+        >
+          <div
+            className="absolute inset-[1.8%] rounded-full"
+            style={{
+              background: "repeating-conic-gradient(from 0deg, rgba(53,29,0,.75) 0deg 1deg, rgba(255,238,150,.7) 1deg 2deg, rgba(112,65,0,.45) 2deg 3deg)",
+              WebkitMaskImage: "radial-gradient(circle, transparent 0 82%, #000 83% 100%)",
+              maskImage: "radial-gradient(circle, transparent 0 82%, #000 83% 100%)",
+            }}
+          />
 
-          <div className="absolute inset-[5%] rounded-full" style={{ background: "radial-gradient(circle at 30% 18%, #fff8bf 0%, #f8d66b 14%, #e0aa2b 42%, #ad710b 69%, #663d00 100%)", border: "2px solid rgba(255,245,179,.88)", boxShadow: "inset 0 2px 6px rgba(255,255,255,.82), inset 0 -10px 18px rgba(60,33,0,.62), 0 2px 3px rgba(48,27,0,.65)", transform: "translateZ(7px)" }}>
-            <div className="absolute inset-[4%] rounded-full" style={{ border: "2px solid rgba(90,53,0,.36)", boxShadow: "inset 0 0 0 2px rgba(255,235,139,.42), inset 0 0 22px rgba(255,255,255,.16)" }} />
-            <div className="absolute inset-[9%] rounded-full" style={{ border: "1px dashed rgba(255,239,153,.62)" }} />
+          {/* Face */}
+          <div
+            className="absolute inset-[6%] rounded-full overflow-hidden"
+            style={{
+              background: "radial-gradient(circle at 29% 17%,#fffbd7 0%,#f9db70 12%,#d9a52d 34%,#a66a08 64%,#4d2c00 100%)",
+              border: "2px solid rgba(255,247,190,.94)",
+              boxShadow: "inset 0 3px 7px rgba(255,255,255,.9), inset 0 -15px 23px rgba(55,29,0,.7), 0 2px 4px rgba(42,22,0,.75)",
+              transform: "translateZ(9px)",
+            }}
+          >
+            <div
+              className="absolute inset-[4%] rounded-full"
+              style={{
+                border: "2px solid rgba(86,48,0,.42)",
+                boxShadow: "inset 0 0 0 2px rgba(255,239,145,.45), inset 0 0 26px rgba(255,255,255,.18)",
+              }}
+            />
+            <div className="absolute inset-[9%] rounded-full border border-dashed border-yellow-100/60" />
+
+            {/* Engraved emblem */}
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <svg viewBox="0 0 100 100" className="w-16 h-16 md:w-[4.5rem] md:h-[4.5rem] mb-1" aria-hidden="true">
-                <circle cx="50" cy="50" r="34" fill="none" stroke="rgba(255,247,190,.88)" strokeWidth="2.5" />
-                <circle cx="50" cy="50" r="28" fill="none" stroke="rgba(92,54,0,.50)" strokeWidth="1.5" />
-                <path d="M36 66V34h16c9 0 14 4 14 10 0 4-2 7-7 9 5 1 8 5 8 9 0 7-6 11-16 11H36Zm8-19h7c5 0 7-2 7-4 0-3-2-4-7-4h-7v8Zm0 14h9c4 0 7-2 7-5 0-3-3-5-7-5h-9v10Z" fill="rgba(91,53,0,.82)" />
-                <path d="M20 50h9M71 50h9M50 20v9M50 71v9" stroke="rgba(255,246,181,.82)" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-              <div className="font-black tracking-[0.16em]" style={{ fontSize: "clamp(1.35rem, 4.2vw, 2.25rem)", color: "#684100", textShadow: "0 1px 0 rgba(255,250,201,.98), 0 3px 4px rgba(55,31,0,.52)", WebkitTextStroke: "1px rgba(75,42,0,.48)" }}>{label}</div>
-              <div className="mt-1 text-[8px] md:text-[9px] font-bold tracking-[0.42em] text-[#704b08]/80">BITZIMI • {mark}</div>
+              <div
+                className="relative flex items-center justify-center w-[43%] aspect-square rounded-full"
+                style={{
+                  background: "linear-gradient(145deg,rgba(255,247,183,.86),rgba(142,86,5,.28))",
+                  border: "2px solid rgba(255,246,185,.86)",
+                  boxShadow: "inset 0 2px 5px rgba(255,255,255,.72), inset 0 -5px 9px rgba(65,34,0,.55), 0 2px 3px rgba(56,30,0,.5)",
+                }}
+              >
+                <svg viewBox="0 0 100 100" className="w-[66%] h-[66%]" aria-hidden="true">
+                  <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(91,52,0,.55)" strokeWidth="2" />
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="rgba(255,248,191,.72)" strokeWidth="1.5" />
+                  <path d="M35 68V32h17c10 0 16 5 16 12 0 5-3 9-8 11 6 2 10 6 10 12 0 8-7 13-18 13H35Zm8-22h8c5 0 8-2 8-5s-3-5-8-5h-8v10Zm0 16h10c5 0 8-2 8-6s-3-6-8-6H43v12Z" fill="rgba(75,42,0,.84)" />
+                  <path d="M17 50h10M73 50h10M50 17v10M50 73v10" stroke="rgba(255,247,185,.9)" strokeWidth="2.4" strokeLinecap="round" />
+                </svg>
+              </div>
+
+              <div
+                className="mt-2 font-black tracking-[0.14em]"
+                style={{
+                  fontSize: "clamp(1.35rem,4.5vw,2.4rem)",
+                  color: "#603900",
+                  textShadow: "0 1px 0 rgba(255,252,210,.98), 0 3px 5px rgba(54,29,0,.6)",
+                  WebkitTextStroke: "1px rgba(72,39,0,.46)",
+                }}
+              >
+                {label}
+              </div>
+              <div className="mt-1 text-[8px] md:text-[9px] font-bold tracking-[0.46em] text-[#704b08]/80">
+                BITZIMI • {mark}
+              </div>
             </div>
-            <div className="absolute left-[14%] top-[8%] w-[44%] h-[18%] rounded-full" style={{ background: "linear-gradient(125deg, rgba(255,255,255,.92), rgba(255,255,255,0))", transform: "rotate(-18deg)", filter: "blur(.2px)" }} />
+
+            {/* Specular highlight */}
+            <div
+              className="absolute left-[12%] top-[7%] w-[48%] h-[21%] rounded-full"
+              style={{
+                background: "linear-gradient(125deg,rgba(255,255,255,.96),rgba(255,255,255,.28) 42%,transparent 75%)",
+                transform: "rotate(-18deg)",
+                filter: "blur(.25px)",
+              }}
+            />
           </div>
         </div>
       </div>
