@@ -1,0 +1,58 @@
+name: One-time Coin Flip UI fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-coinflip-ui-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'apply Coin Flip UI fix') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact Coin Flip UI-only changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/pages/PvPCoinFlipGame.tsx')
+          s = p.read_text()
+
+          old_import = 'import { ArrowLeft, Info, Shield } from "lucide-react";'
+          new_import = 'import { ArrowLeft, Info, Shield, Search as SearchIcon } from "lucide-react";'
+          if old_import in s:
+              s = s.replace(old_import, new_import, 1)
+          elif 'Search as SearchIcon' not in s:
+              raise SystemExit('Expected lucide-react import was not found; refusing to modify anything.')
+
+          old_idle = '''            {gameState === "idle" && (\n              <div className="text-center">\n                <Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button>\n              </div>\n            )}'''
+          new_idle = '''            {gameState === "idle" && (\n              <div className="text-center">\n                <Button\n                  onClick={() => setGameState("searching")}\n                  variant="outline"\n                  className="h-8 px-3 rounded-full bg-transparent border-gray-400/70 dark:border-gray-600/70 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100/10 dark:hover:bg-gray-800/20"\n                >\n                  <SearchIcon className="h-3.5 w-3.5 mr-1.5" />\n                  Search\n                </Button>\n              </div>\n            )}'''
+          if old_idle not in s:
+              raise SystemExit('Expected Coin Flip Search button markup was not found; refusing to modify anything.')
+          if s.count(old_idle) != 1:
+              raise SystemExit(f'Expected exactly one Search button match, found {s.count(old_idle)}; refusing to modify anything.')
+          s = s.replace(old_idle, new_idle, 1)
+
+          old_fairness = '''          <div></div>\n          <div className="flex items-center justify-end"><Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button></div>'''
+          new_fairness = '''          <div className="col-start-1 flex items-center justify-start">\n            <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5">\n              <Shield className="h-3.5 w-3.5" />Verify Fairness\n            </Button>\n          </div>\n          <div></div>'''
+          if old_fairness not in s:
+              raise SystemExit('Expected current Verify Fairness placement was not found; refusing to modify anything.')
+          if s.count(old_fairness) != 1:
+              raise SystemExit(f'Expected exactly one Verify Fairness match, found {s.count(old_fairness)}; refusing to modify anything.')
+          s = s.replace(old_fairness, new_fairness, 1)
+
+          p.write_text(s)
+          PY
+      - name: Commit UI-only changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/PvPCoinFlipGame.tsx
+          git diff --cached --check
+          git diff --cached -- src/app/pages/PvPCoinFlipGame.tsx
+          git commit -m "apply Coin Flip UI fix"
+          git push
