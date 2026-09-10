@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/normalize-game-play-headers.mjs && node scripts/apply-gameplay-flow-v3.mjs && node scripts/repair-coinflip-flow-v4.mjs && vite build",
+    "build": "node scripts/normalize-game-play-headers.mjs && node scripts/apply-gameplay-flow-v3.mjs && node scripts/repair-coinflip-flow-v4.mjs && node scripts/repair-coinflip-flow-v5.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
