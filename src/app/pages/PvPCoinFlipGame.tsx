@@ -269,7 +269,7 @@ export default function PvPCoinFlipGame() {
           </Button>
         </div>
 
-        {/* [Title Row] - Spin Battle-style two-row header */
+        {/* [Title Row] - Spin Battle-style two-row header */}
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
           <div className="min-w-0 flex items-center gap-[6px]">
             <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Coin Flip</h1>
@@ -549,20 +549,21 @@ export default function PvPCoinFlipGame() {
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 flex flex-col items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setGameState("ready"); }}
+                className="w-auto bg-transparent hover:bg-white/5 dark:hover:bg-white/5 border-gray-400 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-xl px-4 py-2 text-sm font-medium"
+              >
+                <span className="mr-2" aria-hidden="true">⌕</span>
+                Search for New Opponent
+              </Button>
               <Button
                 variant="outline"
                 onClick={handleExit}
-                className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+                className="w-auto bg-transparent hover:bg-white/5 dark:hover:bg-white/5 border-gray-400 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-xl px-4 py-2 text-sm font-medium"
               >
-                Back to Stake Selection
-              </Button>
-              <Button onClick={() => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setGameState("ready"); }}>Search for New Opponent</Button>
-              <Button
-                onClick={() => { setShowResultPopup(false); navigate(`/game/pvp-coinflip/play?stake=${stakeAmount}`); }}
-                className="w-full mt-2"
-              >
-                Search for New Opponent
+                Back to Stake Room
               </Button>
             </div>
           </div>
