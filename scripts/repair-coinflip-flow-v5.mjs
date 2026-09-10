@@ -10,14 +10,7 @@ if (!s.includes("animationElapsedMs")) {
   );
 }
 
-s = s.replace(
-  '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} />',
-  '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} animationElapsedMs={animationElapsedMs} animationDurationMs={animationDurationMs} />'
-);
-s = s.replace(
-  '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={false} />',
-  '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={false} animationElapsedMs={animationDurationMs} animationDurationMs={animationDurationMs} />'
-);
-
+// Keep the existing coin component markup/design unchanged. The elapsed/duration
+// values remain backend-derived state used by the flow clock and recovery logic.
 fs.writeFileSync(path, s);
 console.log("Applied authoritative Coin Flip animation state wiring.");
