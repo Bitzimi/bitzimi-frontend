@@ -20,6 +20,19 @@ const write = (p, s) => fs.writeFileSync(p, s);
   const searchBlock = /\{gameState === "(?:idle|ready)" && \(\s*<div className="text-center">\s*<Button onClick=\{\(\) => setGameState\("searching"\)\} className="px-10 py-5 text-lg">Search<\/Button>\s*<\/div>\s*\)\}/;
   const newSearch = '{gameState === "ready" && (\n              <div className="text-center">\n                <Button\n                  onClick={startSearch}\n                  variant="outline"\n                  className="h-8 px-3 rounded-full bg-transparent !bg-transparent border-gray-400/70 dark:border-gray-600/70 text-sm font-medium text-gray-700 dark:text-gray-300 hover:!bg-transparent"\n                >\n                  <SearchIcon className="h-3.5 w-3.5 mr-1.5" />\n                  Search\n                </Button>\n                <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">Stake are deducted when opponent is found</div>\n              </div>\n            )}';
   s = s.replace(searchBlock, newSearch);
+
+  // Premium result modal surface. This changes presentation only; winner/loser
+  // content and all backend-authoritative result values remain untouched.
+  s = s.replace(
+    'className="sm:max-w-md bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 to-gray-800 border-gray-300 dark:border-gray-700"',
+    'className="w-[calc(100%-2rem)] sm:max-w-md rounded-3xl border border-white/10 dark:border-white/10 bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-[#182235] dark:via-[#141d2d] dark:to-[#101827] shadow-2xl shadow-black/40 backdrop-blur-xl p-6 sm:p-7"'
+  );
+  // The exact class currently in production source uses a valid dark gradient token.
+  s = s.replace(
+    'className="sm:max-w-md bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-gray-300 dark:border-gray-700"',
+    'className="w-[calc(100%-2rem)] sm:max-w-md rounded-3xl border border-white/10 dark:border-white/10 bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-[#182235] dark:via-[#141d2d] dark:to-[#101827] shadow-2xl shadow-black/40 backdrop-blur-xl p-6 sm:p-7"'
+  );
+
   write(p, s);
 }
 
