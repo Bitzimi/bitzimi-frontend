@@ -5,7 +5,7 @@ let s=fs.readFileSync(path,"utf8");
 // Coin Flip must not persist game/session/stat state in browser storage.
 s=s.replace(/\n\s*\/\/ Statistics tracker for debugging fairness[\s\S]*?\n\s*\/\/ Prevent double execution in React Strict Mode/m,"\n\n  // Prevent double execution in React Strict Mode");
 s=s.replace(/\n\s*\/\/ Load session history from localStorage on mount[\s\S]*?\n\s*\}, \[stakeAmount\]\);/m,"");
-s=s.replace(/\n\s*\/\/ Save session history to localStorage whenever it changes[\s\S]*?\n\s*\}, \[sessionHistory, stakeAmount\]\);/m,"");
+s=s.replace(/\n\s*\/\/ Save session history to localStorage whenever it changes[\s\S]*?\n\s*\}, \[sessionHistory, stakeAmount\);/m,"");
 s=s.replace(/\n\s*localStorage\.(?:getItem|setItem|removeItem)\([^\n]+\);?/g,"");
 
 if(!/const timersRef = useRef/.test(s)){
@@ -32,11 +32,27 @@ if(startMatch){const start=startMatch.index;const end=s.indexOf('const addToSess
 
 // Backend-only history: never write Coin Flip history to browser storage.
 const historyStart=s.indexOf('const addToSessionHistory =');
-if(historyStart>=0){const exitStart=s.indexOf('const handleExit =',historyStart);if(exitStart>=0)s=s.slice(0,historyStart)+'const addToSessionHistory=(_record:Omit<SessionRecord,"id"|"timestamp">)=>{};\n\n'+s.slice(exitStart);}
+if(historyStart>=0){
+  const exitStart=s.indexOf('const handleExit =',historyStart);
+  if(exitStart>=0) s=s.slice(0,historyStart)+'const addToSessionHistory=(_record:Omit<SessionRecord,"id"|"timestamp">)=>{};\n\n'+s.slice(exitStart);
+}
+
+// The result popup references handleNewSearch. Keep exactly one handler AFTER the
+// history cleanup above, because that cleanup intentionally replaces the old
+// addToSessionHistory block and must not delete the search handler with it.
+const newSearchHandler='  const handleNewSearch = () => { forceSearchRef.current=true; searchInFlight.current=false; clearPolling(); clearTimers(); setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null); setAnimationElapsedMs(0); settledMatchHandled.current=null; transactionRecorded.current=false; startSearch(); };\n\n';
+const handlerStart=s.indexOf('const handleNewSearch =');
+if(handlerStart>=0){
+  const handlerEnd=s.indexOf('const handleExit =',handlerStart);
+  if(handlerEnd>handlerStart) s=s.slice(0,handlerStart)+newSearchHandler+s.slice(handlerEnd);
+} else {
+  const exitMarker=s.indexOf('  const handleExit = () => {');
+  if(exitMarker>=0) s=s.slice(0,exitMarker)+newSearchHandler+s.slice(exitMarker);
+}
 
 // Generic Home/Player1 vs Away/Player2 mapping.
 const playersStart=s.indexOf('          {/* Players */}');
 const gameAreaStart=playersStart>=0?s.indexOf('          {/* Game Area */}',playersStart):-1;
 if(playersStart>=0&&gameAreaStart>=0){const players=`          {/* Players: left = backend Home/Player1, right = backend Away/Player2 */}\n          <div className="flex items-center justify-between mb-6">\n            {(() => {\n              const home=matchData?.isPlayer1?{name:myUsername,avatar:playerAvatar}:{name:opponentName,avatar:opponentAvatar};\n              const away=matchData?.isPlayer1?{name:opponentName,avatar:opponentAvatar}:{name:myUsername,avatar:playerAvatar};\n              return <>\n                <div className="flex flex-col items-center"><div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-2xl md:text-3xl mb-2 overflow-hidden"><PlayerAvatar avatar={home.avatar}/></div><div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{home.name}</div></div>\n                <div className="flex-1 mx-4 text-center"><div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">Balance: {formatCurrencyNoDecimals(balances.game)}</div></div>\n                <div className="flex flex-col items-center"><div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-2xl md:text-3xl mb-2 overflow-hidden"><PlayerAvatar avatar={away.avatar}/></div><div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{away.name}</div></div>\n              </>;\n            })()}\n          </div>\n\n`;s=s.slice(0,playersStart)+players+s.slice(gameAreaStart);}
 
-fs.writeFileSync(path,s);console.log("Applied final Coin Flip authoritative 12s/5s timeline, generic Home/Away avatar mapping, and local-storage cleanup.");
+fs.writeFileSync(path,s);console.log("Applied final Coin Flip authoritative 12s/5s timeline, generic Home/Away avatar mapping, local-storage cleanup, and preserved Search handler.");
