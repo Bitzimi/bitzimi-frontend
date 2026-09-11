@@ -188,7 +188,6 @@ const logic = String.raw`  // Coin Flip presentation timing is backend-authorita
     clearTimelineTimer();
   };
 
-  // Compatibility entry points only. Neither can create a second timer or determine an outcome.
   const assignSides = (md?: any) => {
     const data = md ?? matchData;
     if (!data?.matchId) return;
@@ -234,8 +233,22 @@ playerBlock = playerBlock.replace('avatar={opponentAvatar}', 'avatar={awayAvatar
 playerBlock = playerBlock.replace('{opponentName}', '{awayName}');
 s = s.slice(0, playerBlockStart) + playerBlock + s.slice(gameAreaStart);
 
+// The side-assignment panel must use the same backend Home/Away mapping as the player row.
+const sideStart = s.indexOf('{gameState === "side_assignment" && (');
+const flipStart = sideStart >= 0 ? s.indexOf('{gameState === "flipping" && (', sideStart) : -1;
+if (sideStart >= 0 && flipStart > sideStart) {
+  let sideBlock = s.slice(sideStart, flipStart);
+  sideBlock = sideBlock.replace('avatar={identity.avatar}', 'avatar={homeAvatar}');
+  sideBlock = sideBlock.replace('{myUsername}', '{homeName}');
+  sideBlock = sideBlock.replace('avatar={opponentAvatar}', 'avatar={awayAvatar}');
+  sideBlock = sideBlock.replace('{opponentName}', '{awayName}');
+  sideBlock = sideBlock.replace('{playerSide?.toUpperCase()}', '{homeSide?.toUpperCase()}');
+  sideBlock = sideBlock.replace('{opponentSide?.toUpperCase()}', '{awaySide?.toUpperCase()}');
+  s = s.slice(0, sideStart) + sideBlock + s.slice(flipStart);
+}
+
 const derivedMarker = '  const totalPot =';
-const derived = `  const isPlayer1 = Boolean(matchData?.isPlayer1);\n  const homeName = isPlayer1 ? myUsername : (matchData?.opponent?.username ?? opponentName);\n  const awayName = isPlayer1 ? (matchData?.opponent?.username ?? opponentName) : myUsername;\n  const homeAvatar = isPlayer1 ? playerAvatar : (matchData?.opponent?.avatar ?? opponentAvatar);\n  const awayAvatar = isPlayer1 ? (matchData?.opponent?.avatar ?? opponentAvatar) : playerAvatar;\n\n`;
+const derived = `  const isPlayer1 = Boolean(matchData?.isPlayer1);\n  const homeName = isPlayer1 ? myUsername : (matchData?.opponent?.username ?? opponentName);\n  const awayName = isPlayer1 ? (matchData?.opponent?.username ?? opponentName) : myUsername;\n  const homeAvatar = isPlayer1 ? playerAvatar : (matchData?.opponent?.avatar ?? opponentAvatar);\n  const awayAvatar = isPlayer1 ? (matchData?.opponent?.avatar ?? opponentAvatar) : playerAvatar;\n  const homeSide = isPlayer1 ? playerSide : opponentSide;\n  const awaySide = isPlayer1 ? opponentSide : playerSide;\n\n`;
 s = s.replace(derivedMarker, derived + derivedMarker);
 
 s = s.replace('<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} />', '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={gameState === "flipping"} />');
