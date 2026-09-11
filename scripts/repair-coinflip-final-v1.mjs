@@ -74,8 +74,10 @@ if (s.includes(waitStart) && s.includes(waitEnd)) {
 }
 
 // Dynamic stats: before a real match exists Pool and Winner are zero.
-s = s.replace(/const totalPot=Number\(matchData\?\.totalPool\?\?stakeAmount\); const winnerGets=Number\(matchData\?\.payout\?\?\(feeRate>0\?totalPot\*\(1-feeRate\):0\)\);/g, 'const totalPot=Number(matchData?.totalPool??0); const winnerGets=Number(matchData?.winnerPayout??(matchData?.payout??0));');
-s = s.replace(/const totalPot = Number\(matchData\?\.totalPool \?\? stakeAmount\);\s*const winnerGets = Number\(matchData\?\.payout \?\? \(feeRate > 0 \? totalPot \* \(1 - feeRate \) : 0\)\);/g, 'const totalPot = Number(matchData?.totalPool ?? 0);\n  const winnerGets = Number(matchData?.winnerPayout ?? matchData?.payout ?? 0);');
+s = s.replaceAll("matchData?.totalPool ?? stakeAmount", "matchData?.totalPool ?? 0");
+s = s.replaceAll("matchData?.totalPool??stakeAmount", "matchData?.totalPool??0");
+s = s.replace(/const totalPot=Number\(matchData\?\.totalPool\?\?0\); const winnerGets=Number\(matchData\?\.payout\?\?\(feeRate>0\?totalPot\*\(1-feeRate\):0\)\);/g, 'const totalPot=Number(matchData?.totalPool??0); const winnerGets=Number(matchData?.winnerPayout??(matchData?.payout??0));');
+s = s.replace(/const totalPot = Number\(matchData\?\.totalPool \?\? 0\);\s*const winnerGets = Number\(matchData\?\.payout \?\? \(feeRate > 0 \? totalPot \* \(1 - feeRate \) : 0\)\);/g, 'const totalPot = Number(matchData?.totalPool ?? 0);\n  const winnerGets = Number(matchData?.winnerPayout ?? matchData?.payout ?? 0);');
 
 // Once the finished modal is closed, explicitly clear the finished match from this page.
 // The next reload therefore cannot render the old result from a URL/session state.
@@ -153,23 +155,27 @@ if (s.includes(modalBottomMarker) && !s.includes("Actual Match Sides")) {
 // Search for New Opponent must call backend matchmaking, not merely reset React state.
 s = s.replace('onClick={() => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setGameState("ready"); }}', 'onClick={handleNewSearch}');
 
-// Modal automatically returns to the ready/search screen after 5 seconds unless the user acts.
-if (!s.includes("resultAutoCloseRef")) {
-  const marker = "  const transactionRecorded = useRef(false);";
-  const inject = `  const transactionRecorded = useRef(false);
-  const resultAutoCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-`;
-  if (s.includes(marker)) s = s.replace(marker, inject);
-  const effectMarker = "  // Public matchmaking starts only after the user presses Search.";
-  const effect = `  useEffect(() => {
-    if (resultAutoCloseRef.current) { clearTimeout(resultAutoCloseRef.current); resultAutoCloseRef.current=null; }
+// Result modal automatically returns to the ready/search screen after 5 seconds unless the user acts.
+// This timer is cancelled automatically when the modal closes, so it can never interfere with a new search.
+if (!s.includes("Coin Flip result modal auto-close")) {
+  const finalReturn = s.lastIndexOf("\n  return (");
+  if (finalReturn >= 0) {
+    const effect = `
+  // Coin Flip result modal auto-close: completed matches return to the ready/search state after 5 seconds.
+  useEffect(() => {
     if (!showResultPopup) return;
-    resultAutoCloseRef.current=setTimeout(() => { closeFinishedMatch(); }, 5000);
-    return () => { if (resultAutoCloseRef.current) { clearTimeout(resultAutoCloseRef.current); resultAutoCloseRef.current=null; } };
+    const timer = window.setTimeout(() => {
+      clearPolling(); clearTimers();
+      setShowResultPopup(false); setShowWinner(false); setCoinResult(null);
+      setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null);
+      setAnimationElapsedMs(0); searchInFlight.current=false; transactionRecorded.current=false;
+      setGameState("ready");
+    }, 5000);
+    return () => window.clearTimeout(timer);
   }, [showResultPopup]);
-
 `;
-  if (s.includes(effectMarker)) s = s.replace(effectMarker, effect + effectMarker);
+    s = s.slice(0, finalReturn) + effect + s.slice(finalReturn);
+  }
 }
 
 // Make closing the dialog via X/overlay also clear the finished match.
