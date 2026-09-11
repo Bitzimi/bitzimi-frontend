@@ -8,5 +8,27 @@ s=s.replace('const homeName = matchData?.isHome ? myUsername : opponentName;','c
 s=s.replace('const awayName = matchData?.isHome ? opponentName : myUsername;','const awayName = matchData ? (matchData.isHome ? opponentName : myUsername) : opponentName;');
 s=s.replace('const homeAvatar = matchData?.isHome ? playerAvatar : opponentAvatar;','const homeAvatar = matchData ? (matchData.isHome ? playerAvatar : opponentAvatar) : playerAvatar;');
 s=s.replace('const awayAvatar = matchData?.isHome ? opponentAvatar : playerAvatar;','const awayAvatar = matchData ? (matchData.isHome ? opponentAvatar : playerAvatar) : opponentAvatar;');
+
+// Fix the actual top Home/Away player row. The original source uses identity.avatar
+// for the left player, so the backend-assigned Home opponent could still inherit
+// the current user's avatar. Keep this change scoped to the player row only.
+const playersStart=s.indexOf('          {/* Players */}');
+const gameAreaStart=s.indexOf('          {/* Game Area */}',playersStart);
+if(playersStart>=0&&gameAreaStart>playersStart){
+  let playersBlock=s.slice(playersStart,gameAreaStart);
+  playersBlock=playersBlock.replace('avatar={identity.avatar}','avatar={homeAvatar}');
+  playersBlock=playersBlock.replace('avatar={opponentAvatar}','avatar={awayAvatar}');
+  playersBlock=playersBlock.replace('{myUsername}','{homeName}');
+  playersBlock=playersBlock.replace('{opponentName}','{awayName}');
+  s=s.slice(0,playersStart)+playersBlock+s.slice(gameAreaStart);
+}
+
+// The backend is authoritative for the 12s side-assignment -> 5s flip lifecycle.
+// Keep polling from the moment a match is assigned; the previous flow only called
+// syncActiveMatch once while in side_assignment, so it could remain there forever.
+const oldAssign='const assignSides = (md?:any) => { if(md?.matchId){setMatchData(md);setPlayerSide(md.playerSide??null);setOpponentSide(md.opponentSide??null);syncActiveMatch(md.matchId)} };';
+const newAssign='const assignSides = (md?:any) => { if(!md?.matchId)return; setMatchData(md); setPlayerSide(md.playerSide??null); setOpponentSide(md.opponentSide??null); clearPolling(); pollRef.current=setInterval(()=>{syncActiveMatch(md.matchId);},250); syncActiveMatch(md.matchId); };';
+s=s.replace(oldAssign,newAssign);
+
 fs.writeFileSync(path,s);
-console.log("Coin Flip pre-match Home/Away display defaults repaired");
+console.log("Coin Flip final Home/Away avatar mapping and backend phase polling repaired");
