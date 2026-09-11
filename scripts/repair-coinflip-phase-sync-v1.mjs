@@ -9,6 +9,14 @@ let s = fs.readFileSync(p, "utf8");
 // the UI could remain on "Sides Assigned" indefinitely.
 s = s.replace(/setTimeout\(\(\) => assignSides\(match\), 3000\);/g, "assignSides(match);");
 
+// The coin component previously received isAnimating={true} permanently.
+// It must follow the backend-authoritative UI phase so the CSS animation
+// stops exactly when the backend says the 5-second flipping phase has ended.
+s = s.replace(
+  /<ProfessionalGoldCoin side=\{coinResult \|\| "heads"\} isAnimating=\{true\} \/>/g,
+  '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={gameState === "flipping"} />'
+);
+
 const a = s.indexOf("const finalScheduleCoinFlipTimeline=(md:any)=>{");
 const b = s.indexOf("\n\nconst assignSides", a);
 if (a < 0 || b < 0) throw new Error("Coin Flip timeline markers not found");
@@ -40,7 +48,7 @@ const fn = [
   " const refreshAtBoundary=async()=>{try{const fresh=await gameMatchmakingService.getMatch(md.matchId);await finalScheduleCoinFlipTimeline(fresh);}catch{const retry=Math.min(500,Math.max(100,effectiveSideEnd-Date.now()));timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},retry));}};",
   " if(phase===\"side_assignment\"){setCoinResult(null);setAnimationElapsedMs(0);setGameState(\"side_assignment\");const delay=Math.max(0,effectiveSideEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
   " if(phase===\"flipping\"){setCoinResult(null);setAnimationElapsedMs(Math.max(0,Math.min(flipDurationMs,nowMs-effectiveSideEnd)));setGameState(\"flipping\");const delay=Math.max(0,effectiveFlipEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
-  " if(phase===\"result_popup\"){setAnimationElapsedMs(flipDurationMs);await finalApplyCoinFlipResult(md);setGameState(\"result_popup\");const delay=Math.max(0,effectivePopupEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
+  " if(phase===\"result_popup\"){setAnimationElapsedMs(flipDurationMs);await finalApplyCoinFlipResult(md);setGameState(\"result_popup\");setShowWinner(true);setShowResultPopup(true);const delay=Math.max(0,effectivePopupEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
   " if(phase===\"finished\"){setAnimationElapsedMs(totalMs);setShowResultPopup(false);setShowWinner(false);setGameState(\"ready\");clearTimers();}",
   "}",
 ].join("\n");
@@ -70,4 +78,4 @@ if (startMatch) {
 }
 
 fs.writeFileSync(p, s);
-console.log("Coin Flip frontend now refreshes backend phase at every 8s/5s/5s boundary");
+console.log("Coin Flip frontend now refreshes backend phase at every 8s/5s/5s boundary and stops animation at flip end");
