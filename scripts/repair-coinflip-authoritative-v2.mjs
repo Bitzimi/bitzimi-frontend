@@ -7,9 +7,10 @@ const logicStart = s.indexOf('  // Statistics tracker for debugging fairness');
 const logicEnd = s.indexOf('  const totalPot =', logicStart);
 if (logicStart < 0 || logicEnd < 0) throw new Error("Coin Flip logic markers not found");
 
-const logic = String.raw`  // Coin Flip presentation timing is backend-authoritative.
-  // No Coin Flip timing, result, winner, side, or settlement is generated locally.
+const logic = String.raw`  // Coin Flip presentation is driven only by the backend match phase.
+  // The frontend never decides the opponent, sides, coin result, winner, payout, or settlement.
   const transactionRecorded = useRef(false);
+  const lastPhaseRef = useRef<string | null>(null);
   const [animationElapsedMs, setAnimationElapsedMs] = useState(0);
   const [animationDurationMs, setAnimationDurationMs] = useState(5000);
   const timelineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -24,10 +25,158 @@ const logic = String.raw`  // Coin Flip presentation timing is backend-authorita
     setOpponentAvatar(match?.opponent?.avatar ?? match?.opponent?.username?.charAt(0).toUpperCase() ?? "P");
   };
 
+  const loadHistory = async () => {
+    try {
+      const rows = await gameMatchmakingService.getCoinFlipHistory(stakeAmount);
+      setSessionHistory(rows.map((r) => ({
+        id: r.matchId,
+        opponent: r.opponent.username,
+        opponentAvatar: r.opponent.avatar ?? null,
+        result: r.youWon ? "win" : "loss",
+        outcome: r.result ?? "heads",
+        amount: r.youWon ? r.payout - r.stake : r.stake,
+        stake: r.stake,
+        timestamp: r.settledAt ?? r.createdAt,
+      })));
+    } catch {}
+  };
+
+  const applyCoinFlipResult = async (md: any) => {
+    const result = md?.result?.coinFlip as CoinSide | undefined;
+    if (!result || md?.status !== "settled") return;
+
+    const won = Boolean(md.youWon);
+    const gameOpponentName = md.opponent?.username ?? opponentName ?? "Player";
+    const gameOpponentAvatar = md.opponent?.avatar ?? md.opponent?.username?.charAt(0).toUpperCase() ?? opponentAvatar;
+    const winnings = Number(md.payout ?? 0);
+
+    setPlatformFee(Number(md.platformFee ?? 0));
+    setCoinResult(result);
+    setIsWinner(won);
+    setWinAmount(won ? winnings : 0);
+    setWinnerAvatar(won ? playerAvatar : gameOpponentAvatar);
+    setWinnerName(won ? myUsername : gameOpponentName);
+
+    if (!transactionRecorded.current) {
+      transactionRecorded.current = true;
+      await refreshWalletsFromBackend().catch(() => {});
+      await loadHistory();
+      await refreshFromBackend().catch(() => {});
+      addGameResult({
+        gameType: "pvp_coinflip",
+        betAmount: stakeAmount,
+        winAmount: won ? winnings : 0,
+        profit: won ? winnings - stakeAmount : -stakeAmount,
+        won,
+        opponent: gameOpponentName,
+        outcome: result,
+      });
+      if (won) liveActivityService.addActivity("game_win", myUsername, "won in Coin Flip", winnings - stakeAmount);
+    }
+  };
+
+  const scheduleCoinFlipTimeline = async (initialMatch: any) => {
+    if (!initialMatch?.matchId) return;
+    clearTimelineTimer();
+    setMatchData(initialMatch);
+    setOpponentFromMatch(initialMatch);
+
+    const flipDurationMs = Number(initialMatch.animationDurationMs ?? 5000);
+    setAnimationDurationMs(flipDurationMs);
+    setPlayerSide(initialMatch.isPlayer1 ? initialMatch.result?.p1Side : initialMatch.result?.p2Side);
+    setOpponentSide(initialMatch.isPlayer1 ? initialMatch.result?.p2Side : initialMatch.result?.p1Side);
+
+    const applyPhase = async (md: any) => {
+      const phase = md?.phase;
+      if (!phase) return;
+      setMatchData(md);
+      setOpponentFromMatch(md);
+
+      const mdFlipDuration = Number(md.animationDurationMs ?? 5000);
+      setAnimationDurationMs(mdFlipDuration);
+      setPlayerSide(md.isPlayer1 ? md.result?.p1Side : md.result?.p2Side);
+      setOpponentSide(md.isPlayer1 ? md.result?.p2Side : md.result?.p1Side);
+
+      if (phase === "side_assignment") {
+        setCoinResult(null);
+        setAnimationElapsedMs(0);
+        setShowWinner(false);
+        setShowResultPopup(false);
+        setGameState("side_assignment");
+        return;
+      }
+
+      if (phase === "flipping") {
+        setCoinResult(null);
+        const flipStartedAt = Date.parse(md.animationStartAt ?? "");
+        const serverNow = Date.parse(md.serverNow ?? "");
+        const elapsed = Number.isFinite(flipStartedAt) && Number.isFinite(serverNow)
+          ? Math.max(0, Math.min(mdFlipDuration, serverNow - flipStartedAt - Number(md.sideAssignmentDurationMs ?? 8000)))
+          : 0;
+        setAnimationElapsedMs(elapsed);
+        setShowWinner(false);
+        setShowResultPopup(false);
+        setGameState("flipping");
+        return;
+      }
+
+      if (phase === "result_popup") {
+        setAnimationElapsedMs(mdFlipDuration);
+        await applyCoinFlipResult(md);
+        setGameState("result_popup");
+        setShowWinner(true);
+        setShowResultPopup(true);
+        return;
+      }
+
+      if (phase === "finished") {
+        setAnimationElapsedMs(mdFlipDuration);
+        setShowResultPopup(false);
+        setShowWinner(false);
+        setGameState("ready");
+        clearTimelineTimer();
+      }
+    };
+
+    const syncFromBackend = async () => {
+      try {
+        const fresh = await gameMatchmakingService.getMatch(initialMatch.matchId);
+        const phase = fresh?.phase;
+        if (!phase) {
+          timelineTimerRef.current = setTimeout(syncFromBackend, 500);
+          return;
+        }
+
+        if (phase !== lastPhaseRef.current) {
+          lastPhaseRef.current = phase;
+          await applyPhase(fresh);
+        } else if (phase === "result_popup") {
+          // Keep the popup/result data refreshed from the backend without replaying settlement.
+          await applyCoinFlipResult(fresh);
+        }
+
+        if (phase !== "finished") timelineTimerRef.current = setTimeout(syncFromBackend, 500);
+      } catch {
+        timelineTimerRef.current = setTimeout(syncFromBackend, 500);
+      }
+    };
+
+    lastPhaseRef.current = null;
+    await syncFromBackend();
+  };
+
   const startSearch = async () => {
     if (gameState !== "ready") return;
     if (balances.game < stakeAmount) { toast.error("Insufficient balance in Game Wallet"); return; }
+    clearTimelineTimer();
+    lastPhaseRef.current = null;
+    transactionRecorded.current = false;
+    setShowResultPopup(false);
+    setShowWinner(false);
+    setCoinResult(null);
+    setAnimationElapsedMs(0);
     setGameState("searching");
+
     try {
       if (privateMatchId) {
         const match = await gameMatchmakingService.getMatch(privateMatchId);
@@ -82,126 +231,90 @@ const logic = String.raw`  // Coin Flip presentation timing is backend-authorita
   };
 
   useEffect(() => {
-    if (privateMatchId) startSearch();
+    let cancelled = false;
+    if (privateMatchId) {
+      startSearch();
+      loadHistory();
+      return () => {
+        cancelled = true;
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        clearTimelineTimer();
+      };
+    }
+
+    gameMatchmakingService.recoverCoinFlipQueue(stakeAmount).then(async (recovery) => {
+      if (cancelled) return;
+      if (recovery.status === "matched" && recovery.matchId) {
+        await (async () => {
+          const match = await gameMatchmakingService.getMatch(recovery.matchId!);
+          setMatchId(recovery.matchId!);
+          setMatchData(match);
+          setOpponentFromMatch(match);
+          setGameState("matched");
+          await scheduleCoinFlipTimeline(match);
+        })();
+      } else if (recovery.status === "waiting" && recovery.queueId) {
+        setQueueId(recovery.queueId);
+        setGameState("searching");
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = setInterval(async () => {
+          try {
+            const status = await gameMatchmakingService.pollQueue(recovery.queueId!);
+            if (status.status === "matched" && status.matchId) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = null;
+              const match = await gameMatchmakingService.getMatch(status.matchId);
+              setMatchId(status.matchId);
+              setMatchData(match);
+              setOpponentFromMatch(match);
+              setGameState("matched");
+              await scheduleCoinFlipTimeline(match);
+            } else if (status.status === "cancelled") {
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = null;
+              setGameState("ready");
+            }
+          } catch {}
+        }, 500);
+      }
+    }).catch(() => {});
+
+    loadHistory();
     return () => {
+      cancelled = true;
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
       clearTimelineTimer();
     };
-  }, [privateMatchId]);
+  }, [privateMatchId, stakeAmount]);
 
   useEffect(() => {
     if (!matchId) return;
     fairnessService.getMatchFairness(matchId).then(setFairnessData).catch(() => {});
   }, [matchId]);
 
-  const applyCoinFlipResult = async (md: any) => {
-    const result = md?.result?.coinFlip as CoinSide | undefined;
-    if (!result) return;
-    const won = Boolean(md.youWon);
-    const gameOpponentName = md.opponent?.username ?? opponentName ?? "Player";
-    const gameOpponentAvatar = md.opponent?.avatar ?? md.opponent?.username?.charAt(0).toUpperCase() ?? opponentAvatar;
-    const winnings = Number(md.payout ?? 0);
-
-    setPlatformFee(Number(md.platformFee ?? 0));
-    setCoinResult(result);
-    setIsWinner(won);
-    setWinAmount(won ? winnings : 0);
-    setWinnerAvatar(won ? playerAvatar : gameOpponentAvatar);
-    setWinnerName(won ? myUsername : gameOpponentName);
-
-    if (!transactionRecorded.current) {
-      transactionRecorded.current = true;
-      await refreshWalletsFromBackend().catch(() => {});
-      addToSessionHistory({ opponent: gameOpponentName, opponentAvatar: gameOpponentAvatar, result: won ? "win" : "loss", outcome: result, amount: won ? winnings - stakeAmount : stakeAmount, stake: stakeAmount });
-      addGameResult({ gameType: "pvp_coinflip", betAmount: stakeAmount, winAmount: won ? winnings : 0, profit: won ? winnings - stakeAmount : -stakeAmount, won, opponent: gameOpponentName, outcome: result });
-      if (won) liveActivityService.addActivity("game_win", myUsername, "won in Coin Flip", winnings - stakeAmount);
-    }
+  const addToSessionHistory = (_record: Omit<SessionRecord, "id" | "timestamp">) => {
+    void loadHistory();
   };
 
-  const scheduleCoinFlipTimeline = async (initialMatch: any) => {
-    if (!initialMatch?.matchId) return;
+  const handleNewSearch = async () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = null;
     clearTimelineTimer();
-
-    const serverNowMs = Date.parse(initialMatch.serverNow ?? "");
-    const clientNowMs = Date.now();
-    const clockOffsetMs = Number.isFinite(serverNowMs) ? serverNowMs - clientNowMs : 0;
-    const nowMs = Date.now() + clockOffsetMs;
-    const sideEndMs = Date.parse(initialMatch.sideAssignmentEndsAt ?? "");
-    const flipEndMs = Date.parse(initialMatch.flipEndsAt ?? "");
-    const popupEndMs = Date.parse(initialMatch.resultPopupEndsAt ?? "");
-    const createdMs = Date.parse(initialMatch.animationStartAt ?? initialMatch.createdAt ?? "");
-    const sideDurationMs = Number(initialMatch.sideAssignmentDurationMs ?? 8000);
-    const flipDurationMs = Number(initialMatch.animationDurationMs ?? 5000);
-    const popupDurationMs = Number(initialMatch.resultPopupDurationMs ?? 5000);
-    const effectiveSideEnd = Number.isFinite(sideEndMs) ? sideEndMs : createdMs + sideDurationMs;
-    const effectiveFlipEnd = Number.isFinite(flipEndMs) ? flipEndMs : effectiveSideEnd + flipDurationMs;
-    const effectivePopupEnd = Number.isFinite(popupEndMs) ? popupEndMs : effectiveFlipEnd + popupDurationMs;
-
-    setMatchData(initialMatch);
-    setOpponentFromMatch(initialMatch);
-    setPlayerSide(initialMatch.isPlayer1 ? initialMatch.result?.p1Side : initialMatch.result?.p2Side);
-    setOpponentSide(initialMatch.isPlayer1 ? initialMatch.result?.p2Side : initialMatch.result?.p1Side);
-    setAnimationDurationMs(flipDurationMs);
-
-    const refreshAtBoundary = async () => {
-      try {
-        const fresh = await gameMatchmakingService.getMatch(initialMatch.matchId);
-        await scheduleCoinFlipTimeline(fresh);
-      } catch {
-        timelineTimerRef.current = setTimeout(refreshAtBoundary, 250);
-      }
-    };
-
-    const phase = initialMatch.phase ?? (nowMs < effectiveSideEnd ? "side_assignment" : nowMs < effectiveFlipEnd ? "flipping" : nowMs < effectivePopupEnd ? "result_popup" : "finished");
-
-    if (phase === "side_assignment") {
-      setCoinResult(null);
-      setAnimationElapsedMs(0);
-      setGameState("side_assignment");
-      timelineTimerRef.current = setTimeout(refreshAtBoundary, Math.max(0, effectiveSideEnd - nowMs));
-      return;
-    }
-
-    if (phase === "flipping") {
-      setCoinResult(null);
-      setAnimationElapsedMs(Math.max(0, Math.min(flipDurationMs, nowMs - effectiveSideEnd)));
-      setGameState("flipping");
-      timelineTimerRef.current = setTimeout(refreshAtBoundary, Math.max(0, effectiveFlipEnd - nowMs));
-      return;
-    }
-
-    if (phase === "result_popup") {
-      setAnimationElapsedMs(flipDurationMs);
-      await applyCoinFlipResult(initialMatch);
-      setGameState("result_popup");
-      setShowWinner(true);
-      setShowResultPopup(true);
-      timelineTimerRef.current = setTimeout(refreshAtBoundary, Math.max(0, effectivePopupEnd - nowMs));
-      return;
-    }
-
-    setAnimationElapsedMs(flipDurationMs);
     setShowResultPopup(false);
     setShowWinner(false);
+    setCoinResult(null);
+    setMatchId(null);
+    setMatchData(null);
+    setQueueId(null);
+    setAnimationElapsedMs(0);
+    setPlayerSide(null);
+    setOpponentSide(null);
+    lastPhaseRef.current = null;
+    transactionRecorded.current = false;
     setGameState("ready");
-    clearTimelineTimer();
-  };
-
-  const assignSides = (md?: any) => {
-    const data = md ?? matchData;
-    if (!data?.matchId) return;
-    void scheduleCoinFlipTimeline(data);
-  };
-
-  const startGame = (md: any, _assignedPlayerSide: CoinSide) => {
-    if (!md?.matchId) return;
-    void scheduleCoinFlipTimeline(md);
-  };
-
-  const addToSessionHistory = (record: Omit<SessionRecord, "id" | "timestamp">) => {
-    const newRecord: SessionRecord = { ...record, id: "session_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9), timestamp: new Date().toISOString() };
-    setSessionHistory((prev) => [newRecord, ...prev].slice(0, 10));
+    await startSearch();
   };
 
   const handleExit = () => {
@@ -216,42 +329,17 @@ const logic = String.raw`  // Coin Flip presentation timing is backend-authorita
 
 s = s.slice(0, logicStart) + logic + s.slice(logicEnd);
 
-// Coin Flip is forbidden from using browser storage as an authority or cache.
+// Coin Flip must never use browser storage for game state, history, result, or authority.
 s = s.replace(/\n\s*\/\/ Statistics tracker for debugging fairness[\s\S]*?\n\s*\/\/ Prevent double execution in React Strict Mode[\s\S]*?\n\s*const hasStarted = useRef\(false\);/m, "");
 s = s.replace(/\n\s*\/\/ Load session history from localStorage on mount[\s\S]*?\n\s*\}, \[stakeAmount\]\);/m, "");
-s = s.replace(/\n\s*\/\/ Save session history to localStorage whenever it changes[\s\S]*?\n\s*\}, \[sessionHistory, stakeAmount\);/m, "");
+s = s.replace(/\n\s*\/\/ Save session history to localStorage whenever it changes[\s\S]*?\n\s*\}, \[sessionHistory, stakeAmount\]\);/m, "");
 s = s.replace(/localStorage\.(?:getItem|setItem|removeItem)\([^\n]+\);?/g, "");
 
-// Backend determines Home/Player1 and Away/Player2. Keep each username/avatar pair together.
-const playerBlockStart = s.indexOf('          {/* Players */}');
-const gameAreaStart = playerBlockStart >= 0 ? s.indexOf('          {/* Game Area */}', playerBlockStart) : -1;
-if (playerBlockStart < 0 || gameAreaStart < 0) throw new Error("Coin Flip Players UI markers not found");
-let playerBlock = s.slice(playerBlockStart, gameAreaStart);
-playerBlock = playerBlock.replace('avatar={identity.avatar}', 'avatar={homeAvatar}');
-playerBlock = playerBlock.replace('{myUsername}', '{homeName}');
-playerBlock = playerBlock.replace('avatar={opponentAvatar}', 'avatar={awayAvatar}');
-playerBlock = playerBlock.replace('{opponentName}', '{awayName}');
-s = s.slice(0, playerBlockStart) + playerBlock + s.slice(gameAreaStart);
+// Restore the original Home/Player1 and Away/Player2 UI mapping. Do not transform it here.
+// The backend's isPlayer1 and result p1Side/p2Side remain the source of truth.
 
-// The side-assignment panel must use the same backend Home/Away mapping as the player row.
-const sideStart = s.indexOf('{gameState === "side_assignment" && (');
-const flipStart = sideStart >= 0 ? s.indexOf('{gameState === "flipping" && (', sideStart) : -1;
-if (sideStart >= 0 && flipStart > sideStart) {
-  let sideBlock = s.slice(sideStart, flipStart);
-  sideBlock = sideBlock.replace('avatar={identity.avatar}', 'avatar={homeAvatar}');
-  sideBlock = sideBlock.replace('{myUsername}', '{homeName}');
-  sideBlock = sideBlock.replace('avatar={opponentAvatar}', 'avatar={awayAvatar}');
-  sideBlock = sideBlock.replace('{opponentName}', '{awayName}');
-  sideBlock = sideBlock.replace('{playerSide?.toUpperCase()}', '{homeSide?.toUpperCase()}');
-  sideBlock = sideBlock.replace('{opponentSide?.toUpperCase()}', '{awaySide?.toUpperCase()}');
-  s = s.slice(0, sideStart) + sideBlock + s.slice(flipStart);
-}
-
-const derivedMarker = '  const totalPot =';
-const derived = `  const isPlayer1 = Boolean(matchData?.isPlayer1);\n  const homeName = isPlayer1 ? myUsername : (matchData?.opponent?.username ?? opponentName);\n  const awayName = isPlayer1 ? (matchData?.opponent?.username ?? opponentName) : myUsername;\n  const homeAvatar = isPlayer1 ? playerAvatar : (matchData?.opponent?.avatar ?? opponentAvatar);\n  const awayAvatar = isPlayer1 ? (matchData?.opponent?.avatar ?? opponentAvatar) : playerAvatar;\n  const homeSide = isPlayer1 ? playerSide : opponentSide;\n  const awaySide = isPlayer1 ? opponentSide : playerSide;\n\n`;
-s = s.replace(derivedMarker, derived + derivedMarker);
-
+s = s.replace('const { addNotification } = useNotifications();', 'const { refreshFromBackend } = useNotifications();');
 s = s.replace('<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} />', '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={gameState === "flipping"} />');
 
 fs.writeFileSync(path, s);
-console.log("Coin Flip consolidated: one backend-driven timeline, one result handler, no browser storage authority, generic Home/Away mapping.");
+console.log("Coin Flip consolidated: original player mapping preserved, one backend phase synchronizer, 8s/5s/5s backend timeline, backend history, backend notifications, no Coin Flip localStorage.");
