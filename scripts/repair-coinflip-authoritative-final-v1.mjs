@@ -35,13 +35,23 @@ if(historyStart>=0){
   if(exitStart>historyStart) s=s.slice(0,historyStart)+'const addToSessionHistory=(_record:Omit<SessionRecord,"id"|"timestamp">)=>{};\n\n'+s.slice(exitStart);
 }
 
-// The result popup and its auto-close path must have real handlers after the history
-// cleanup. Keep these handlers backend/frontend-state only; no localStorage.
+// Preserve the existing Coin Flip player UI exactly. Only correct its data bindings.
+const playersStart=s.indexOf('          {/* Players */}');
+const gameAreaStart=playersStart>=0?s.indexOf('          {/* Game Area */}',playersStart):-1;
+if(playersStart>=0&&gameAreaStart>playersStart){
+  let playersBlock=s.slice(playersStart,gameAreaStart);
+  playersBlock=playersBlock.replace('avatar={identity.avatar}','avatar={homeAvatar}');
+  playersBlock=playersBlock.replace('avatar={opponentAvatar}','avatar={awayAvatar}');
+  playersBlock=playersBlock.replace('{myUsername}','{homeName}');
+  playersBlock=playersBlock.replace('{opponentName}','{awayName}');
+  s=s.slice(0,playersStart)+playersBlock+s.slice(gameAreaStart);
+}
+
+// Keep exactly one safe result-popup search handler. Only use refs guaranteed by the component.
 const handlers=`  const closeFinishedMatch = () => { clearPolling(); clearTimers(); setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null); setAnimationElapsedMs(0); searchInFlight.current=false; transactionRecorded.current=false; setGameState("ready"); };
   const handleNewSearch = () => { closeFinishedMatch(); setTimeout(() => startSearch(), 0); };
 
 `;
-// Remove any previous declarations before inserting exactly one canonical pair.
 s=s.replace(/\s*const closeFinishedMatch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\};\s*/g,'\n');
 s=s.replace(/\s*const handleNewSearch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\};\s*/g,'\n');
 const exitMatch=s.match(/const handleExit\s*=\s*\(\)\s*=>/);
@@ -52,9 +62,4 @@ else {
   else s=s.replace(/\n\s*return\s*\(/,'\n'+handlers+'\n  return (');
 }
 
-// Generic Home/Player1 vs Away/Player2 mapping.
-const playersStart=s.indexOf('          {/* Players */}');
-const gameAreaStart=playersStart>=0?s.indexOf('          {/* Game Area */}',playersStart):-1;
-if(playersStart>=0&&gameAreaStart>=0){const players=`          {/* Players: left = backend Home/Player1, right = backend Away/Player2 */}\n          <div className="flex items-center justify-between mb-6">\n            {(() => {\n              const home=matchData?.isPlayer1?{name:myUsername,avatar:playerAvatar}:{name:opponentName,avatar:opponentAvatar};\n              const away=matchData?.isPlayer1?{name:opponentName,avatar:opponentAvatar}:{name:myUsername,avatar:playerAvatar};\n              return <>\n                <div className="flex flex-col items-center"><div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-2xl md:text-3xl mb-2 overflow-hidden"><PlayerAvatar avatar={home.avatar}/></div><div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{home.name}</div></div>\n                <div className="flex-1 mx-4 text-center"><div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">Balance: {formatCurrencyNoDecimals(balances.game)}</div></div>\n                <div className="flex flex-col items-center"><div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-2xl md:text-3xl mb-2 overflow-hidden"><PlayerAvatar avatar={away.avatar}/></div><div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{away.name}</div></div>\n              </>;\n            })()}\n          </div>\n\n`;s=s.slice(0,playersStart)+players+s.slice(gameAreaStart);}
-
-fs.writeFileSync(path,s);console.log("Applied final Coin Flip authoritative 12s/5s timeline, generic Home/Away avatar mapping, local-storage cleanup, and stable Search/close handlers.");
+fs.writeFileSync(path,s);console.log("Applied authoritative Coin Flip timeline and backend player mapping without replacing the existing UI design.");
