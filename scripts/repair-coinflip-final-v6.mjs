@@ -30,5 +30,17 @@ const oldAssign='const assignSides = (md?:any) => { if(md?.matchId){setMatchData
 const newAssign='const assignSides = (md?:any) => { if(!md?.matchId)return; setMatchData(md); setPlayerSide(md.playerSide??null); setOpponentSide(md.opponentSide??null); clearPolling(); pollRef.current=setInterval(()=>{syncActiveMatch(md.matchId);},250); syncActiveMatch(md.matchId); };';
 s=s.replace(oldAssign,newAssign);
 
+// Final guard: the result modal always references handleNewSearch. Ensure exactly one
+// canonical handler exists after every preceding build-repair script has run.
+const handlerBody='  const handleNewSearch = () => { forceSearchRef.current=true; searchInFlight.current=false; clearPolling(); clearTimers(); setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null); setAnimationElapsedMs(0); if (typeof settledMatchHandled !== "undefined") settledMatchHandled.current=null; transactionRecorded.current=false; startSearch(); };\n\n';
+const handlerStart=s.indexOf('const handleNewSearch =');
+if(handlerStart>=0){
+  const handlerEnd=s.indexOf('const handleExit =',handlerStart);
+  if(handlerEnd>handlerStart) s=s.slice(0,handlerStart)+handlerBody+s.slice(handlerEnd);
+} else {
+  const exitMarker=s.indexOf('  const handleExit = () => {');
+  if(exitMarker>=0) s=s.slice(0,exitMarker)+handlerBody+s.slice(exitMarker);
+}
+
 fs.writeFileSync(path,s);
-console.log("Coin Flip final Home/Away avatar mapping and backend phase polling repaired");
+console.log("Coin Flip final Home/Away avatar mapping, backend phase polling, and Search handler repaired");
