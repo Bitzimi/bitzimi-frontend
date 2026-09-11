@@ -151,7 +151,6 @@ const logic = String.raw`  // Coin Flip presentation is driven only by the backe
           lastPhaseRef.current = phase;
           await applyPhase(fresh);
         } else if (phase === "result_popup") {
-          // Keep the popup/result data refreshed from the backend without replaying settlement.
           await applyCoinFlipResult(fresh);
         }
 
@@ -246,14 +245,12 @@ const logic = String.raw`  // Coin Flip presentation is driven only by the backe
     gameMatchmakingService.recoverCoinFlipQueue(stakeAmount).then(async (recovery) => {
       if (cancelled) return;
       if (recovery.status === "matched" && recovery.matchId) {
-        await (async () => {
-          const match = await gameMatchmakingService.getMatch(recovery.matchId!);
-          setMatchId(recovery.matchId!);
-          setMatchData(match);
-          setOpponentFromMatch(match);
-          setGameState("matched");
-          await scheduleCoinFlipTimeline(match);
-        })();
+        const match = await gameMatchmakingService.getMatch(recovery.matchId!);
+        setMatchId(recovery.matchId!);
+        setMatchData(match);
+        setOpponentFromMatch(match);
+        setGameState("matched");
+        await scheduleCoinFlipTimeline(match);
       } else if (recovery.status === "waiting" && recovery.queueId) {
         setQueueId(recovery.queueId);
         setGameState("searching");
@@ -341,5 +338,8 @@ s = s.replace(/localStorage\.(?:getItem|setItem|removeItem)\([^\n]+\);?/g, "");
 s = s.replace('const { addNotification } = useNotifications();', 'const { refreshFromBackend } = useNotifications();');
 s = s.replace('<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={true} />', '<ProfessionalGoldCoin side={coinResult || "heads"} isAnimating={gameState === "flipping"} />');
 
+// Preserve the previous correct display: before a backend match exists, Pool and Winner are both $0.
+s = s.replace('  const totalPot = Number(matchData?.totalPool ?? stakeAmount);\n  const winnerGets = Number(matchData?.payout ?? (feeRate > 0 ? totalPot * (1 - feeRate) : 0));', '  const totalPot = matchData ? Number(matchData.totalPool ?? 0) : 0;\n  const winnerGets = matchData ? Number(matchData.payout ?? 0) : 0;');
+
 fs.writeFileSync(path, s);
-console.log("Coin Flip consolidated: original player mapping preserved, one backend phase synchronizer, 8s/5s/5s backend timeline, backend history, backend notifications, no Coin Flip localStorage.");
+console.log("Coin Flip consolidated: original player mapping preserved, one backend phase synchronizer, 8s/5s/5s backend timeline, zero pool/winner before match, backend history, backend notifications, no Coin Flip localStorage.");
