@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/normalize-game-play-headers.mjs && node scripts/apply-gameplay-flow-v3.mjs && node scripts/repair-coinflip-flow-v8.mjs && node scripts/repair-coinflip-service-v1.mjs && node scripts/repair-coinflip-room-isolation-v1.mjs && node scripts/repair-coinflip-timing-v1.mjs && node scripts/repair-coinflip-live-sync-v1.mjs && node scripts/repair-coinflip-live-sync-v2.mjs && vite build",
+    "build": "node scripts/normalize-game-play-headers.mjs && node scripts/apply-gameplay-flow-v3.mjs && node scripts/repair-coinflip-flow-v8.mjs && node scripts/repair-coinflip-service-v1.mjs && node scripts/repair-coinflip-room-isolation-v1.mjs && node scripts/repair-coinflip-timing-v1.mjs && node scripts/repair-coinflip-live-sync-v1.mjs && node scripts/repair-coinflip-live-sync-v2.mjs && node scripts/repair-coinflip-live-sync-debug-v1.mjs && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
