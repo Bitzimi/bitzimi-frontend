@@ -1,186 +1,133 @@
 import fs from "node:fs";
-
-const path = "src/app/pages/PvPCoinFlipGame.tsx";
-let s = fs.readFileSync(path, "utf8");
-
-const between = (source, start, end, replacement) => {
-  const a = source.indexOf(start);
-  const b = source.indexOf(end, a + start.length);
-  if (a < 0 || b < 0) throw new Error(`Coin Flip final repair marker not found: ${start}`);
-  return source.slice(0, a) + replacement + source.slice(b);
-};
-
-// The authoritative lifecycle is 12s side assignment + 5s flipping = 17s total.
-s = s.replaceAll("const [animationDurationMs, setAnimationDurationMs] = useState(17000);", "const [animationDurationMs, setAnimationDurationMs] = useState(17000);");
-s = s.replaceAll("const [animationDurationMs,setAnimationDurationMs]=useState(17000);", "const [animationDurationMs,setAnimationDurationMs]=useState(17000);");
-
-// Keep the live synchronization loop running from the moment a match is found.
-const assignStart = "  const assignSides = (md?:any) => {";
-const assignEnd = "  useEffect(() => {\n    if (!matchId) return;";
-const assignReplacement = `  const assignSides = (md?:any) => {
-    const data=md??matchData;
-    if(!data?.matchId)return;
-    const assignedPlayerSide:CoinSide=data.isPlayer1?data.result?.p1Side:data.result?.p2Side;
-    const assignedOpponentSide:CoinSide=data.isPlayer1?data.result?.p2Side:data.result?.p1Side;
-    setPlayerSide(assignedPlayerSide??null);
-    setOpponentSide(assignedOpponentSide??null);
-    setMatchData(data);
-    setAnimationDurationMs(Number(data.animationDurationMs??17000));
-    setAnimationElapsedMs(Number(data.animationElapsedMs??0));
-    clearTimers();
-    if(data.status==="settled"){applySettledResult(data);return;}
-    setGameState("side_assignment");
-    waitForSettlement(data.matchId,data);
+const path="src/app/pages/PvPCoinFlipGame.tsx";
+let s=fs.readFileSync(path,"utf8");
+const between=(a,start,end,repl)=>{const i=a.indexOf(start),j=a.indexOf(end,i+start.length);if(i<0||j<0)throw new Error("Coin Flip final marker missing: "+start);return a.slice(0,i)+repl+a.slice(j)};
+// Runtime state is backend-authoritative. The page never advances a match by a local 3s/2.5s timer.
+const start=s.indexOf("  const startSearch = async () =>");
+const assign=s.indexOf("  const assignSides =",start);
+if(start>=0&&assign>start){
+const block=`  const startSearch = async (force=false) => {
+    if(searchInFlight.current||(!force&&!['ready','idle'].includes(gameState)))return;
+    if(balances.game<stakeAmount){toast.error("Insufficient balance in Game Wallet");return;}
+    searchInFlight.current=true;clearPolling();clearTimers();transactionRecorded.current=false;setShowResultPopup(false);setShowWinner(false);setCoinResult(null);setMatchId(null);setMatchData(null);setQueueId(null);setPlayerSide(null);setOpponentSide(null);setAnimationElapsedMs(0);setAnimationDurationMs(17000);setGameState("searching");
+    try{
+      if(privateMatchId){const md=await gameMatchmakingService.getMatch(privateMatchId);setMatchId(privateMatchId);await syncActiveMatch(privateMatchId);return;}
+      const r=await gameMatchmakingService.joinQueue("pvp_coinflip",stakeAmount);
+      if(r.status==="matched"&&r.matchId){setMatchId(r.matchId);await syncActiveMatch(r.matchId);return;}
+      if(r.queueId){setQueueId(r.queueId);pollRef.current=setInterval(async()=>{try{const q=await gameMatchmakingService.pollQueue(r.queueId!);if(q.status==="matched"&&q.matchId){clearPolling();setMatchId(q.matchId);await syncActiveMatch(q.matchId)}else if(q.status==="cancelled"){clearPolling();searchInFlight.current=false;setGameState("ready")}}catch{}},250)}
+    }catch{searchInFlight.current=false;setGameState("ready");toast.error("Unable to start matchmaking")}
   };
 
-`;
-if (s.includes(assignStart) && s.includes(assignEnd)) s = between(s, assignStart, assignEnd, assignReplacement);
+  const assignSides = (md?:any) => { if(md?.matchId){setMatchData(md);setPlayerSide(md.playerSide??null);setOpponentSide(md.opponentSide??null);syncActiveMatch(md.matchId)} };
 
-// Use the backend phase continuously. Never depend on a frontend timeout to change phases.
-const syncStart = "  const syncActiveMatch = async (id:string) => {";
-const syncEnd = "  const waitForSettlement =";
-if (s.includes(syncStart) && s.includes(syncEnd)) {
-  const syncReplacement = `  const syncActiveMatch = async (id:string) => {
-    try {
+`;
+s=s.slice(0,start)+block+s.slice(assign+ s.slice(assign).indexOf("  useEffect(() => {"));
+}
+// Replace synchronization helpers with a single idempotent backend-driven loop.
+const sync=s.indexOf("  const syncActiveMatch = async (id:string) => {");
+const wait=s.indexOf("  const waitForSettlement =",sync);
+const search2=s.indexOf("  const startSearch =",wait);
+if(sync>=0&&wait>sync&&search2>wait){
+const helpers=`  const syncActiveMatch = async (id:string) => {
+    try{
       const md=await gameMatchmakingService.getMatch(id);
-      setMatchData(md);
-      setOpponentName(md.opponent?.username??"Player");
-      setOpponentAvatar(md.opponent?.avatar??md.opponent?.username?.charAt(0).toUpperCase()??"P");
-      setPlayerSide(md.playerSide??(md.isPlayer1?md.result?.p1Side:md.result?.p2Side)??null);
-      setOpponentSide(md.opponentSide??(md.isPlayer1?md.result?.p2Side:md.result?.p1Side)??null);
-      setAnimationDurationMs(Number(md.animationDurationMs??17000));
-      setAnimationElapsedMs(Number(md.animationElapsedMs??0));
-      if(md.status==="settled"){clearPolling();await applySettledResult(md);return true;}
-      if(md.phase==="flipping")setGameState("flipping");else setGameState("side_assignment");
-      return false;
-    }catch{return false;}
+      setMatchData(md);setOpponentName(md.opponent?.username??"Player");setOpponentAvatar(md.opponent?.avatar??md.opponent?.username?.charAt(0).toUpperCase()??"P");
+      setPlayerSide(md.playerSide??null);setOpponentSide(md.opponentSide??null);setAnimationDurationMs(Number(md.animationDurationMs??17000));setAnimationElapsedMs(Number(md.animationElapsedMs??0));
+      if(md.status==="settled"){await applySettledResult(md);return true}
+      setGameState(md.phase==="flipping"?"flipping":"side_assignment");return false;
+    }catch{return false}
   };
-  `;
-  s = between(s, syncStart, syncEnd, syncReplacement);
-}
+  const waitForSettlement=(id:string)=>{clearPolling();pollRef.current=setInterval(()=>{syncActiveMatch(id)},250);syncActiveMatch(id)};
 
-// Ensure the polling loop actually drives the backend phase transition and settlement.
-const waitStart = "  const waitForSettlement =";
-const waitEnd = "  const startSearch =";
-if (s.includes(waitStart) && s.includes(waitEnd)) {
-  const waitReplacement = `  const waitForSettlement = (id:string, initialMatch:any) => {
-    clearPolling();
-    syncActiveMatch(id);
-    pollRef.current=setInterval(()=>{syncActiveMatch(id);},250);
+`;
+s=s.slice(0,sync)+helpers+s.slice(search2);
+}
+// Make result application idempotent so polling/React Strict Mode cannot flash the modal repeatedly.
+if(!s.includes("const settledMatchHandled = useRef"))s=s.replace("  const transactionRecorded = useRef(false);","  const transactionRecorded = useRef(false);\n  const settledMatchHandled = useRef<string|null>(null);");
+const app=s.indexOf("  const applySettledResult = async (md:any) => {");
+const sync2=s.indexOf("  const syncActiveMatch =",app);
+if(app>=0&&sync2>app){
+const fn=`  const applySettledResult = async (md:any) => {
+    if(!md?.matchId||md.status!=="settled"||!md.result?.coinFlip)return;
+    if(settledMatchHandled.current===md.matchId)return;
+    settledMatchHandled.current=md.matchId;clearPolling();
+    const won=Boolean(md.youWon),result=md.result.coinFlip as CoinSide,name=md.opponent?.username??"Player",avatar=md.opponent?.avatar??name.charAt(0).toUpperCase(),payout=Number(md.payout??0);
+    setMatchData(md);setOpponentName(name);setOpponentAvatar(avatar);setPlayerSide(md.playerSide??null);setOpponentSide(md.opponentSide??null);setPlatformFee(Number(md.platformFee??0));setCoinResult(result);setIsWinner(won);setWinAmount(won?payout:0);setWinnerAvatar(won?playerAvatar:avatar);setWinnerName(won?myUsername:name);setGameState("showing_result");setShowWinner(true);
+    await refreshWalletsFromBackend().catch(()=>{});await loadHistory().catch(()=>{});
+    if(!transactionRecorded.current){transactionRecorded.current=true;addGameResult({gameType:"pvp_coinflip",betAmount:stakeAmount,winAmount:won?payout:0,profit:won?payout-stakeAmount:-stakeAmount,won,opponent:name,outcome:result});if(won)liveActivityService.addActivity("game_win",myUsername,"won in Coin Flip",payout-stakeAmount)}
+    setShowResultPopup(true);
   };
 
 `;
-  s = between(s, waitStart, waitEnd, waitReplacement);
+s=s.slice(0,app)+fn+s.slice(sync2);
 }
-
-// Dynamic stats: before a real match exists Pool and Winner are zero.
-s = s.replaceAll("matchData?.totalPool ?? stakeAmount", "matchData?.totalPool ?? 0");
-s = s.replaceAll("matchData?.totalPool??stakeAmount", "matchData?.totalPool??0");
-s = s.replace(/const totalPot=Number\(matchData\?\.totalPool\?\?0\); const winnerGets=Number\(matchData\?\.payout\?\?\(feeRate>0\?totalPot\*\(1-feeRate\):0\)\);/g, 'const totalPot=Number(matchData?.totalPool??0); const winnerGets=Number(matchData?.winnerPayout??(matchData?.payout??0));');
-s = s.replace(/const totalPot = Number\(matchData\?\.totalPool \?\? 0\);\s*const winnerGets = Number\(matchData\?\.payout \?\? \(feeRate > 0 \? totalPot \* \(1 - feeRate \) : 0\)\);/g, 'const totalPot = Number(matchData?.totalPool ?? 0);\n  const winnerGets = Number(matchData?.winnerPayout ?? matchData?.payout ?? 0);');
-
-// Once the finished modal is closed, explicitly clear the finished match from this page.
-// The next reload therefore cannot render the old result from a URL/session state.
-if (!s.includes("const closeFinishedMatch =")) {
-  const marker = "  const handleExit = () => {";
-  const helper = `  const closeFinishedMatch = () => {
-    clearPolling(); clearTimers();
-    setShowResultPopup(false); setShowWinner(false); setCoinResult(null);
-    setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null);
-    setAnimationElapsedMs(0); searchInFlight.current=false; transactionRecorded.current=false;
-    setGameState("ready");
-  };
+// Backend recovery: only an active requested-stake match may resume. A settled match is never resurrected.
+const effStart=s.indexOf("  useEffect(() => {");
+const fair=s.indexOf("  useEffect(() => {\n    if (!matchId) return;",effStart);
+if(effStart>=0&&fair>effStart){
+const recovery=`  useEffect(() => {
+    let dead=false;const recover=async()=>{try{if(privateMatchId){searchInFlight.current=false;await startSearch(true);return}const r=await gameMatchmakingService.recoverCoinFlipQueue(stakeAmount);if(dead)return;if(r.status==="matched"&&r.matchId){searchInFlight.current=true;setMatchId(r.matchId);await syncActiveMatch(r.matchId)}else if(r.status==="waiting"&&r.queueId){searchInFlight.current=true;setQueueId(r.queueId);setGameState("searching");pollRef.current=setInterval(async()=>{try{const q=await gameMatchmakingService.pollQueue(r.queueId!);if(q.status==="matched"&&q.matchId){clearPolling();setMatchId(q.matchId);await syncActiveMatch(q.matchId)}else if(q.status==="cancelled"){clearPolling();searchInFlight.current=false;setGameState("ready")}}catch{}},250)}else{searchInFlight.current=false;setGameState("ready")}}catch{if(!dead){searchInFlight.current=false;setGameState("ready")}}};recover();loadHistory().catch(()=>{});return()=>{dead=true;clearPolling();clearTimers()}
+  },[privateMatchId,stakeAmount]);
 
 `;
-  if (s.includes(marker)) s = s.replace(marker, helper + marker);
+s=s.slice(0,effStart)+recovery+s.slice(fair);
 }
-
-// Top player summary follows the actual Home/Away assignment when a match exists.
-const aliasMarker = "  return (";
-if (!s.includes("const homeName = matchData?.isHome")) {
-  const aliases = `  const homeName = matchData ? (matchData.isHome ? myUsername : opponentName) : myUsername;
+// Keep the existing original player-summary UI, but make its left/right data follow backend Home/Away.
+if(!s.includes("const homeName = matchData ?") ){
+const marker="  return (";
+s=s.replace(marker,`  const homeName = matchData ? (matchData.isHome ? myUsername : opponentName) : myUsername;
   const awayName = matchData ? (matchData.isHome ? opponentName : myUsername) : opponentName;
   const homeAvatar = matchData ? (matchData.isHome ? playerAvatar : opponentAvatar) : playerAvatar;
   const awayAvatar = matchData ? (matchData.isHome ? opponentAvatar : playerAvatar) : opponentAvatar;
-  `;
-  if (s.includes(aliasMarker)) s = s.replace(aliasMarker, aliases + aliasMarker);
+  const homeSide = matchData ? (matchData.isHome ? playerSide : opponentSide) : null;
+  const awaySide = matchData ? (matchData.isHome ? opponentSide : playerSide) : null;
+`+marker);
 }
-
-const topStart = "          {/* Players */}";
-const topEnd = "          {/* Game Area */}";
-if (s.includes(topStart) && s.includes(topEnd)) {
-  const topBlock = `          {/* Players */}
-          <div className="flex items-center justify-between mb-6">
-            {/* Home player */}
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-2xl md:text-3xl mb-2 overflow-hidden">
-                <PlayerAvatar avatar={homeAvatar} />
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{homeName}</div>
-            </div>
-            <div className="flex-1 mx-4 text-center">
-              <div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">
-                Balance: {formatCurrencyNoDecimals(balances.game)}
-              </div>
-            </div>
-            {/* Away player */}
-            <div className="flex flex-col items-center">
-              <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-2xl md:text-3xl mb-2 overflow-hidden">
-                <PlayerAvatar avatar={awayAvatar} />
-              </div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">{awayName}</div>
+const ps=s.indexOf("          {/* Players */}"),pe=s.indexOf("          {/* Game Area */}",ps);
+if(ps>=0&&pe>ps){let b=s.slice(ps,pe);b=b.replaceAll("{myUsername}","{homeName}").replaceAll("{opponentName}","{awayName}").replaceAll("avatar={playerAvatar}","avatar={homeAvatar}").replaceAll("avatar={opponentAvatar}","avatar={awayAvatar}");s=s.slice(0,ps)+b+s.slice(pe)}
+// Pool is zero before a real match exists; winner card shows the backend-authoritative possible payout once matched.
+s=s.replace(/const totalPot\s*=\s*Number\(matchData\?\.totalPool\s*\?\?\s*stakeAmount\);/g,"const totalPot = Number(matchData?.totalPool ?? 0);");
+s=s.replace(/const totalPot=Number\(matchData\?\.totalPool\?\?stakeAmount\);/g,"const totalPot=Number(matchData?.totalPool??0);");
+s=s.replace(/const winnerGets\s*=\s*Number\(matchData\?\.payout\s*\?\?\s*\(feeRate[^;]+\);/g,"const winnerGets = Number(matchData?.winnerPayout ?? matchData?.payout ?? 0);");
+s=s.replace(/const winnerGets=Number\(matchData\?\.payout[^;]+;/g,"const winnerGets=Number(matchData?.winnerPayout??matchData?.payout??0);");
+// Search for New Opponent uses the exact same backend startSearch path as the main Search button.
+if(!s.includes("const handleNewSearch ="))s=s.replace("  const handleExit = () => {","  const handleNewSearch = () => { startSearch(true); };\n\n  const handleExit = () => {");
+s=s.replace(/onClick=\{\(\) => \{ setShowResultPopup\(false\); setShowWinner\(false\); setCoinResult\(null\); setMatchId\(null\); setMatchData\(null\); setGameState\("ready"\); \}\}/g,"onClick={handleNewSearch}");
+// Finished modal: winner/loss at top, actual coin result at bottom. No "Actual Match Sides" block.
+const ms=s.indexOf("      {/* Result Popup */}");const mf=s.indexOf("      <FairnessModal",ms);
+if(ms>=0&&mf>ms){
+const modal=`      {/* Result Popup */}
+      <Dialog open={showResultPopup} onOpenChange={(open)=>{if(!open)closeFinishedMatch();else setShowResultPopup(true)}}>
+        <DialogContent className="sm:max-w-md bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-gray-300 dark:border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-center">
+              <div className={\`text-2xl font-bold \${isWinner ? "text-green-500" : "text-red-500"}\`}>{myUsername} {isWinner ? "Wins!" : "Lost!"}</div>
+            </DialogTitle>
+            <DialogDescription className="text-center text-gray-700 dark:text-gray-300">{isWinner ? `Congratulations ${myUsername}!` : "Better luck next time!"}</DialogDescription>
+          </DialogHeader>
+          <div className="text-center space-y-4">
+            <div><div className="text-sm text-gray-500 dark:text-gray-400">Amount</div><div className={\`text-3xl font-bold \${isWinner ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}\`}>{isWinner ? "+" : "-"}{formatCurrencyNoDecimals(isWinner ? winAmount-stakeAmount : stakeAmount)}</div></div>
+            <div><div className="text-sm text-gray-500 dark:text-gray-400">Winnings: {formatCurrencyNoDecimals(isWinner ? winAmount : 0)} (after {Math.round(totalPot>0 ? (platformFee/totalPot)*100 : 10)}% fee)</div></div>
+            <div className="pt-2 flex flex-col items-center gap-2"><div className="text-sm font-semibold text-gray-500 dark:text-gray-400">{coinResult?.toUpperCase() ?? ""}</div></div>
+            <div className="flex flex-col gap-2">
+              <Button onClick={handleNewSearch} className="w-full">Search for New Opponent</Button>
+              <Button variant="outline" onClick={closeFinishedMatch} className="w-full">Back to Stake Room</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
 `;
-  s = between(s, topStart, topEnd, topBlock + topEnd);
+s=s.slice(0,ms)+modal+s.slice(mf);
 }
+// Finished-match cleanup and the 5-second automatic return. Cleanup removes the match from page state so reload cannot resurrect it.
+if(!s.includes("const closeFinishedMatch =")){s=s.replace("  const handleNewSearch = () => { startSearch(true); };",`  const closeFinishedMatch = () => { clearPolling();clearTimers();setShowResultPopup(false);setShowWinner(false);setCoinResult(null);setMatchId(null);setMatchData(null);setQueueId(null);setPlayerSide(null);setOpponentSide(null);setAnimationElapsedMs(0);searchInFlight.current=false;settledMatchHandled.current=null;transactionRecorded.current=false;setGameState("ready"); };
+  const handleNewSearch = () => { closeFinishedMatch(); setTimeout(()=>startSearch(true),0); };`)}
+if(!s.includes("// Coin Flip result modal auto-close")){s=s.replace("  return (",`  // Coin Flip result modal auto-close
+  useEffect(()=>{if(!showResultPopup)return;const t=window.setTimeout(()=>closeFinishedMatch(),5000);return()=>window.clearTimeout(t)},[showResultPopup]);
 
-// Remove any previous side-assignment text that was inserted at the top of the modal.
-s = s.replace(/\n\s*<div className="mb-3 text-sm font-semibold text-gray-500 dark:text-gray-400">\{myUsername\} — \{playerSide\?\.toUpperCase\(\) \?\? ""\} &nbsp; vs &nbsp; \{opponentName\} — \{opponentSide\?\.toUpperCase\(\) \?\? ""\}<\/div>/g, "");
-
-// Only the result modal UI is changed: winner/loss remains at the top; actual sides/result are shown at the bottom.
-const modalBottomMarker = `            <div className="pt-2 flex flex-col items-center gap-2">`;
-if (s.includes(modalBottomMarker) && !s.includes("Actual Match Sides")) {
-  const sideBlock = `            <div className="text-center text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50 rounded p-3">
-              <div className="font-semibold text-gray-900 dark:text-white mb-1">Actual Match Sides</div>
-              <div>{myUsername} — {playerSide?.toUpperCase() ?? ""} &nbsp; vs &nbsp; {opponentName} — {opponentSide?.toUpperCase() ?? ""}</div>
-              <div className="mt-1">Coin Result: <span className="font-bold text-gray-900 dark:text-white">{coinResult?.toUpperCase() ?? ""}</span></div>
-            </div>
-
-`;
-  s = s.replace(modalBottomMarker, sideBlock + modalBottomMarker);
-}
-
-// Search for New Opponent must call backend matchmaking, not merely reset React state.
-s = s.replace('onClick={() => { setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setGameState("ready"); }}', 'onClick={handleNewSearch}');
-
-// Result modal automatically returns to the ready/search screen after 5 seconds unless the user acts.
-// This timer is cancelled automatically when the modal closes, so it can never interfere with a new search.
-if (!s.includes("Coin Flip result modal auto-close")) {
-  const finalReturn = s.lastIndexOf("\n  return (");
-  if (finalReturn >= 0) {
-    const effect = `
-  // Coin Flip result modal auto-close: completed matches return to the ready/search state after 5 seconds.
-  useEffect(() => {
-    if (!showResultPopup) return;
-    const timer = window.setTimeout(() => {
-      clearPolling(); clearTimers();
-      setShowResultPopup(false); setShowWinner(false); setCoinResult(null);
-      setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null);
-      setAnimationElapsedMs(0); searchInFlight.current=false; transactionRecorded.current=false;
-      setGameState("ready");
-    }, 5000);
-    return () => window.clearTimeout(timer);
-  }, [showResultPopup]);
-`;
-    s = s.slice(0, finalReturn) + effect + s.slice(finalReturn);
-  }
-}
-
-// Make closing the dialog via X/overlay also clear the finished match.
-s = s.replace('<Dialog open={showResultPopup} onOpenChange={setShowResultPopup}>', '<Dialog open={showResultPopup} onOpenChange={(open) => { if (!open) closeFinishedMatch(); else setShowResultPopup(true); }} >');
-
-// This final pass intentionally changes no visual styling outside the permitted result modal content.
-fs.writeFileSync(path, s);
-console.log("Coin Flip final lifecycle/sync/modal repair applied");
+  return (`)}
+// Remove old injected top-of-modal side text if an earlier build pass left it.
+s=s.replace(/\s*<div className="mb-3 text-sm font-semibold text-gray-500 dark:text-gray-400">\{myUsername\} — \{playerSide\?\.toUpperCase\(\) \?\? ""\} &nbsp; vs &nbsp; \{opponentName\} — \{opponentSide\?\.toUpperCase\(\) \?\? ""\}<\/div>/g,"");
+fs.writeFileSync(path,s);
+console.log("Coin Flip final lifecycle, Home/Away sync, 5s flip, result modal and matchmaking repair applied");
