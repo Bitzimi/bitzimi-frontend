@@ -13,6 +13,8 @@ if (logicStart < 0 || logicEnd < 0) throw new Error("Coin Flip logic markers not
 const logic = String.raw`  // Coin Flip presentation timing is backend-authoritative.
   // No Coin Flip timing, result, winner, side, or settlement is generated locally.
   const transactionRecorded = useRef(false);
+  const [animationElapsedMs, setAnimationElapsedMs] = useState(0);
+  const [animationDurationMs, setAnimationDurationMs] = useState(5000);
   const timelineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearTimelineTimer = () => {
@@ -249,7 +251,7 @@ s = s.slice(0, logicStart) + logic + s.slice(logicEnd);
 // Coin Flip is forbidden from using browser storage as an authority or cache.
 s = s.replace(/\n\s*\/\/ Statistics tracker for debugging fairness[\s\S]*?\n\s*\/\/ Prevent double execution in React Strict Mode[\s\S]*?\n\s*const hasStarted = useRef\(false\);/m, "");
 s = s.replace(/\n\s*\/\/ Load session history from localStorage on mount[\s\S]*?\n\s*\}, \[stakeAmount\]\);/m, "");
-s = s.replace(/\n\s*\/\/ Save session history to localStorage whenever it changes[\s\S]*?\n\s*\}, \[sessionHistory, stakeAmount\]\);/m, "");
+s = s.replace(/\n\s*\/\/ Save session history to localStorage whenever it changes[\s\S]*?\n\s*\}, \[sessionHistory, stakeAmount\);/m, "");
 s = s.replace(/localStorage\.(?:getItem|setItem|removeItem)\([^\n]+\);?/g, "");
 
 // Backend determines Home/Player1 and Away/Player2. Keep each username/avatar pair together.
