@@ -175,5 +175,6 @@ if (!s.includes("resultAutoCloseRef")) {
 // Make closing the dialog via X/overlay also clear the finished match.
 s = s.replace('<Dialog open={showResultPopup} onOpenChange={setShowResultPopup}>', '<Dialog open={showResultPopup} onOpenChange={(open) => { if (!open) closeFinishedMatch(); else setShowResultPopup(true); }} >');
 
+// This final pass intentionally changes no visual styling outside the permitted result modal content.
 fs.writeFileSync(path, s);
 console.log("Coin Flip final lifecycle/sync/modal repair applied");
