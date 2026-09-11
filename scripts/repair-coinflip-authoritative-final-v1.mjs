@@ -12,8 +12,6 @@ if(!/const timersRef = useRef/.test(s)){
   s=s.replace(/  \/\/ Prevent double execution in React Strict Mode/,'  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);\n  const clearTimers = () => { for(const t of timersRef.current) clearTimeout(t); timersRef.current=[]; };\n\n  // Prevent double execution in React Strict Mode');
 }
 
-// Use uniquely named helpers because earlier Coin Flip repair scripts may already
-// have generated helpers with similar names.
 const helpers=`  const finalCoinFlipElapsedMs=(md:any)=>{const startedAt=Date.parse(md?.createdAt??"");const serverNow=Date.parse(md?.serverNow??"");const now=Number.isFinite(serverNow)?serverNow:Date.now();return Number.isFinite(startedAt)?Math.max(0,now-startedAt):0;};
   const finalApplyCoinFlipResult=async(md:any)=>{const result=md?.result?.coinFlip as CoinSide|undefined;if(!result)return;const won=Boolean(md.youWon);const name=md.opponent?.username??opponentName??"Player";const avatar=md.opponent?.avatar??name.charAt(0).toUpperCase();const winnings=Number(md.payout??0);setPlatformFee(Number(md.platformFee??0));setCoinResult(result);setIsWinner(won);setWinAmount(won?winnings:0);setWinnerAvatar(won?playerAvatar:avatar);setWinnerName(won?myUsername:name);setGameState("showing_result");if(!transactionRecorded.current){transactionRecorded.current=true;await refreshWalletsFromBackend().catch(()=>{});addGameResult({gameType:"pvp_coinflip",betAmount:stakeAmount,winAmount:won?winnings:0,profit:won?winnings-stakeAmount:-stakeAmount,won,opponent:name,outcome:result});}setShowWinner(true);setShowResultPopup(true);};
   const finalScheduleCoinFlipTimeline=(md:any)=>{const elapsed=finalCoinFlipElapsedMs(md);const SIDE_MS=12000;const FLIP_MS=5000;const TOTAL_MS=SIDE_MS+FLIP_MS;setAnimationDurationMs(TOTAL_MS);setAnimationElapsedMs(Math.min(TOTAL_MS,elapsed));setPlayerSide(md.isPlayer1?md.result?.p1Side:md.result?.p2Side);setOpponentSide(md.isPlayer1?md.result?.p2Side:md.result?.p1Side);clearTimers();if(elapsed<SIDE_MS){setGameState("side_assignment");timersRef.current.push(setTimeout(()=>finalScheduleCoinFlipTimeline(md),SIDE_MS-elapsed));return;}if(elapsed<TOTAL_MS){setGameState("flipping");setCoinResult(md.result?.coinFlip??null);timersRef.current.push(setTimeout(()=>finalScheduleCoinFlipTimeline(md),TOTAL_MS-elapsed));return;}finalApplyCoinFlipResult(md);};
@@ -33,21 +31,22 @@ if(startMatch){const start=startMatch.index;const end=s.indexOf('const addToSess
 // Backend-only history: never write Coin Flip history to browser storage.
 const historyStart=s.indexOf('const addToSessionHistory =');
 if(historyStart>=0){
-  const exitStart=s.indexOf('const handleExit =',historyStart);
-  if(exitStart>=0) s=s.slice(0,historyStart)+'const addToSessionHistory=(_record:Omit<SessionRecord,"id"|"timestamp">)=>{};\n\n'+s.slice(exitStart);
+  const exitStart=s.search(/const handleExit\s*=\s*\(\)\s*=>/);
+  if(exitStart>historyStart) s=s.slice(0,historyStart)+'const addToSessionHistory=(_record:Omit<SessionRecord,"id"|"timestamp">)=>{};\n\n'+s.slice(exitStart);
 }
 
-// The result popup references handleNewSearch. Keep exactly one handler AFTER the
-// history cleanup above, because that cleanup intentionally replaces the old
-// addToSessionHistory block and must not delete the search handler with it.
-const newSearchHandler='  const handleNewSearch = () => { forceSearchRef.current=true; searchInFlight.current=false; clearPolling(); clearTimers(); setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null); setAnimationElapsedMs(0); settledMatchHandled.current=null; transactionRecorded.current=false; startSearch(); };\n\n';
-const handlerStart=s.indexOf('const handleNewSearch =');
-if(handlerStart>=0){
-  const handlerEnd=s.indexOf('const handleExit =',handlerStart);
-  if(handlerEnd>handlerStart) s=s.slice(0,handlerStart)+newSearchHandler+s.slice(handlerEnd);
-} else {
-  const exitMarker=s.indexOf('  const handleExit = () => {');
-  if(exitMarker>=0) s=s.slice(0,exitMarker)+newSearchHandler+s.slice(exitMarker);
+// IMPORTANT: the history cleanup above intentionally removes everything between
+// addToSessionHistory and handleExit. Recreate the Search-for-New-Opponent handler
+// after that cleanup using a regex marker, not a whitespace-sensitive string.
+const handler='const handleNewSearch = () => { forceSearchRef.current=true; searchInFlight.current=false; clearPolling(); clearTimers(); setShowResultPopup(false); setShowWinner(false); setCoinResult(null); setMatchId(null); setMatchData(null); setQueueId(null); setPlayerSide(null); setOpponentSide(null); setAnimationElapsedMs(0); settledMatchHandled.current=null; transactionRecorded.current=false; startSearch(); };\n\n';
+// Remove any existing declaration so there is exactly one.
+s=s.replace(/\s*const handleNewSearch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?\};\s*/g,'\n');
+const exitMatch=s.match(/const handleExit\s*=\s*\(\)\s*=>/);
+if(exitMatch) s=s.slice(0,exitMatch.index)+handler+s.slice(exitMatch.index);
+else {
+  const totalPotMarker=s.search(/const totalPot\s*=/);
+  if(totalPotMarker>=0) s=s.slice(0,totalPotMarker)+handler+s.slice(totalPotMarker);
+  else s=s.replace(/\n\s*return\s*\(/,'\n  '+handler+'\n  return (');
 }
 
 // Generic Home/Player1 vs Away/Player2 mapping.
