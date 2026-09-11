@@ -10,7 +10,7 @@ const between=(source,start,end,replacement)=>{
   return source.slice(0,a)+replacement+source.slice(b);
 };
 
-s=s.replace('const [animationElapsedMs, setAnimationElapsedMs] = useState(0);\\n  const [animationDurationMs, setAnimationDurationMs] = useState(12000);','const [animationElapsedMs, setAnimationElapsedMs] = useState(0);\\n  const [animationDurationMs, setAnimationDurationMs] = useState(17000);');
+s=s.replace(/const \[animationElapsedMs, setAnimationElapsedMs\] = useState\(0\);\s*const \[animationDurationMs, setAnimationDurationMs\] = useState\(12000\);/,'const [animationElapsedMs, setAnimationElapsedMs] = useState(0);\n  const [animationDurationMs, setAnimationDurationMs] = useState(17000);');
 
 const helperStart='  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);';
 const helperEnd='  // Prevent double execution in React Strict Mode';
@@ -58,7 +58,7 @@ const recovery=`  useEffect(() => {
 s=between(s,recoveryStart,recoveryEnd,recovery+recoveryEnd);
 
 const assignStart='  const assignSides = (md?:any) => {';
-const assignEnd='  useEffect(() => {\n    if (!matchId) return;';
+const assignEnd='  useEffect(() => {';
 const assign=`  const assignSides = (md?:any) => { const data=md??matchData;if(!data)return;setPlayerSide(data.playerSide??(data.isPlayer1?data.result?.p1Side:data.result?.p2Side)??null);setOpponentSide(data.opponentSide??(data.isPlayer1?data.result?.p2Side:data.result?.p1Side)??null);setAnimationDurationMs(Number(data.animationDurationMs??17000));setAnimationElapsedMs(Number(data.animationElapsedMs??0));if(data.status==="settled"){applySettledResult(data);return;}if(data.phase==="flipping"){startGame(data,null);}else{setGameState("side_assignment");}};\n\n`;
 s=between(s,assignStart,assignEnd,assign+assignEnd);
 
@@ -67,7 +67,6 @@ const gameEnd='  const addToSessionHistory =';
 const game=`  const startGame = (md:any,_assignedPlayerSide:CoinSide|null) => { if(!md?.matchId)return;setAnimationDurationMs(Number(md.animationDurationMs??17000));setAnimationElapsedMs(Number(md.animationElapsedMs??0));setCoinResult(null);setGameState("flipping");waitForSettlement(md.matchId); };\n\n`;
 s=between(s,gameStart,gameEnd,game);
 
-// Keep the original layout but make the two player positions represent Home/Away.
 const homeAliases=`  const homeName = matchData?.isHome ? myUsername : opponentName;\n  const awayName = matchData?.isHome ? opponentName : myUsername;\n  const homeAvatar = matchData?.isHome ? playerAvatar : opponentAvatar;\n  const awayAvatar = matchData?.isHome ? opponentAvatar : playerAvatar;\n  const homeSide = matchData?.isHome ? playerSide : opponentSide;\n  const awaySide = matchData?.isHome ? opponentSide : playerSide;\n`;
 s=s.replace('  return (',homeAliases+'  return (');
 
@@ -80,10 +79,8 @@ if(uiStart>=0&&uiEnd>=0){
   s=s.slice(0,uiStart)+block+s.slice(uiEnd+uiEndMarker.length);
 }
 
-// Winner card becomes the authoritative expected winner payout as soon as the match exists.
 s=s.replace(/const totalPot=Number\(matchData\?\.totalPool\?\?stakeAmount\); const winnerGets=Number\(matchData\?\.payout\?\?\(feeRate>0\?totalPot\*\(1-feeRate\):0\)\);/,'const totalPot=Number(matchData?.totalPool??stakeAmount); const winnerGets=Number(matchData?.winnerPayout??(feeRate>0?totalPot*(1-feeRate):0));');
 
-// The only intentional UI addition: show the actual assigned sides in the existing result modal.
 const modalMarker='          <DialogHeader>\n            <DialogTitle className="text-center">\n              <div className="text-5xl mb-3">';
 const modalInsert='          <DialogHeader>\n            <DialogTitle className="text-center">\n              <div className="mb-3 text-sm font-semibold text-gray-500 dark:text-gray-400">{myUsername} — {playerSide?.toUpperCase() ?? ""} &nbsp; vs &nbsp; {opponentName} — {opponentSide?.toUpperCase() ?? ""}</div>\n              <div className="text-5xl mb-3">';
 if(!s.includes('myUsername} — {playerSide?.toUpperCase()')){
