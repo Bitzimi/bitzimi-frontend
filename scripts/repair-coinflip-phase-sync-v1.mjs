@@ -3,8 +3,10 @@ import fs from "node:fs";
 const p = "src/app/pages/PvPCoinFlipGame.tsx";
 let s = fs.readFileSync(p, "utf8");
 
-// Remove the old frontend-only 3 second transition. The backend match timeline
-// is the single source of truth for when each Coin Flip phase begins/ends.
+// The backend is the only authority for Coin Flip phase boundaries.
+// The frontend must refresh the match at every boundary instead of reusing
+// the previous payload's phase value. Reusing a stale `phase` was the reason
+// the UI could remain on "Sides Assigned" indefinitely.
 s = s.replace(/setTimeout\(\(\) => assignSides\(match\), 3000\);/g, "assignSides(match);");
 
 const a = s.indexOf("const finalScheduleCoinFlipTimeline=(md:any)=>{");
@@ -35,9 +37,10 @@ const fn = [
   " setOpponentSide(md.isPlayer1?md.result?.p2Side:md.result?.p1Side);",
   " setAnimationDurationMs(flipDurationMs);",
   " clearTimers();",
-  " if(phase===\"side_assignment\"){setCoinResult(null);setAnimationElapsedMs(0);setGameState(\"side_assignment\");const delay=Math.max(0,effectiveSideEnd-nowMs);timersRef.current.push(setTimeout(()=>{finalScheduleCoinFlipTimeline(md);},delay));return;}",
-  " if(phase===\"flipping\"){setCoinResult(null);setAnimationElapsedMs(Math.max(0,Math.min(flipDurationMs,nowMs-effectiveSideEnd)));setGameState(\"flipping\");const delay=Math.max(0,effectiveFlipEnd-nowMs);timersRef.current.push(setTimeout(()=>{finalScheduleCoinFlipTimeline(md);},delay));return;}",
-  " if(phase===\"result_popup\"){setAnimationElapsedMs(flipDurationMs);await finalApplyCoinFlipResult(md);setGameState(\"result_popup\");const delay=Math.max(0,effectivePopupEnd-nowMs);timersRef.current.push(setTimeout(()=>{finalScheduleCoinFlipTimeline({...md,phase:\"finished\",serverNow:new Date().toISOString()});},delay));return;}",
+  " const refreshAtBoundary=async()=>{try{const fresh=await gameMatchmakingService.getMatch(md.matchId);await finalScheduleCoinFlipTimeline(fresh);}catch{const retry=Math.min(500,Math.max(100,effectiveSideEnd-Date.now()));timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},retry));}};",
+  " if(phase===\"side_assignment\"){setCoinResult(null);setAnimationElapsedMs(0);setGameState(\"side_assignment\");const delay=Math.max(0,effectiveSideEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
+  " if(phase===\"flipping\"){setCoinResult(null);setAnimationElapsedMs(Math.max(0,Math.min(flipDurationMs,nowMs-effectiveSideEnd)));setGameState(\"flipping\");const delay=Math.max(0,effectiveFlipEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
+  " if(phase===\"result_popup\"){setAnimationElapsedMs(flipDurationMs);await finalApplyCoinFlipResult(md);setGameState(\"result_popup\");const delay=Math.max(0,effectivePopupEnd-nowMs);timersRef.current.push(setTimeout(()=>{refreshAtBoundary();},delay));return;}",
   " if(phase===\"finished\"){setAnimationElapsedMs(totalMs);setShowResultPopup(false);setShowWinner(false);setGameState(\"ready\");clearTimers();}",
   "}",
 ].join("\n");
@@ -67,4 +70,4 @@ if (startMatch) {
 }
 
 fs.writeFileSync(p, s);
-console.log("Coin Flip frontend phase synchronization aligned to backend 8s/5s/5s timeline");
+console.log("Coin Flip frontend now refreshes backend phase at every 8s/5s/5s boundary");
