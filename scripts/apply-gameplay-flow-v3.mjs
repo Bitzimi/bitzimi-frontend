@@ -31,14 +31,6 @@ const write = (p, s) => fs.writeFileSync(p, s);
 }
 
 {
-  const p = "src/app/pages/PvPCoinFlipGame.tsx";
-  let s = read(p);
-  s = s.replace(/useState<GameState>\("idle"\)/, 'useState<GameState>("ready")');
-  s = s.replace(/\n\s*\/\* Idle State[\s\S]*?\{gameState === "idle" && \([\s\S]*?\n\s*\)\}\n/, "\n");
-  write(p, s);
-}
-
-{
   const p = "src/app/hooks/useGlobalGameMonitor.tsx";
   let s = read(p);
   s = s.replace(/\n\s*addNotifRef\.current\(\n\s*"game_win",[\s\S]*?\n\s*\);/g, "");
