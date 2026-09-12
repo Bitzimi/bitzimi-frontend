@@ -31,6 +31,15 @@ const write = (p, s) => fs.writeFileSync(p, s);
 }
 
 {
+  const p = "src/app/pages/PvPCoinFlipGame.tsx";
+  let s = read(p);
+  s = s.replace('useState<GameState>("idle")', 'useState<GameState>("ready")');
+  const idle = '            {gameState === "idle" && (\n              <div className="text-center"><Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button></div>\n            )}\n\n';
+  s = s.replace(idle, '');
+  write(p, s);
+}
+
+{
   const p = "src/app/hooks/useGlobalGameMonitor.tsx";
   let s = read(p);
   s = s.replace(/\n\s*addNotifRef\.current\(\n\s*"game_win",[\s\S]*?\n\s*\);/g, "");
