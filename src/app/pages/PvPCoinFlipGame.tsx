@@ -9,7 +9,8 @@ import { useWallet } from "../contexts/WalletContext";
 import { useGameStats } from "../contexts/GameStatsContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { liveActivityService } from "../services/liveActivityService";
-import { gameMatchmakingService } from '../services/gameMatchmakingService';
+import { gameMatchmakingService, fairnessService, type FairnessData } from '../services/gameMatchmakingService';
+import { FairnessModal } from "../components/FairnessModal";
 // affiliateCommissionService removed — commissions handled server-side
 import { useIdentity } from "../contexts/IdentityContext";
 import { PlayerAvatar } from "../components/PlayerAvatar";
@@ -23,7 +24,7 @@ import {
 } from "../components/ui/dialog";
 import { ProfessionalGoldCoin } from "../components/ProfessionalGoldCoin";
 
-type GameState = "ready" | "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
+type GameState = "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
 type CoinSide = "heads" | "tails";
 
 // Avatar is NOT stored in session history — resolved at render time from identity
@@ -52,7 +53,7 @@ export default function PvPCoinFlipGame() {
   const { identity } = useIdentity();
   const myUsername = identity.username;
 
-  const [gameState, setGameState] = useState<GameState>(privateMatchId ? "searching" : "ready");
+  const [gameState, setGameState] = useState<GameState>("searching");
   const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
   const [isWinner, setIsWinner] = useState<boolean>(false);
   const [winAmount, setWinAmount] = useState<number>(0);
@@ -67,7 +68,6 @@ export default function PvPCoinFlipGame() {
   const [queueId, setQueueId] = useState<string | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [matchData, setMatchData] = useState<any>(null);
-  const [verificationId, setVerificationId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [winnerAvatar, setWinnerAvatar] = useState<string>("");
   const [winnerName, setWinnerName] = useState<string>("");
@@ -75,6 +75,8 @@ export default function PvPCoinFlipGame() {
   const [playerSide, setPlayerSide] = useState<CoinSide | null>(null);
   const [opponentSide, setOpponentSide] = useState<CoinSide | null>(null);
   const [showRules, setShowRules] = useState(false);
+  const [showFairness,  setShowFairness]  = useState(false);
+  const [fairnessData,  setFairnessData]  = useState<FairnessData | null>(null);
 
   // Statistics tracker for debugging fairness
   const [stats, setStats] = useState(() => {
@@ -92,27 +94,185 @@ export default function PvPCoinFlipGame() {
   // Track if transaction has been recorded for this game
   const transactionRecorded = useRef(false);
 
-  // Backend-authoritative session history. No game outcomes are stored locally.
+  // Load session history from localStorage on mount
   useEffect(() => {
-    const load = async () => {
-      const apiBase = (import.meta as any).env?.VITE_API_URL as string | undefined;
-      const token = localStorage.getItem("bitzimi_access_token");
-      if (!apiBase || !token) { setSessionHistory([]); return; }
+    const loadSessionHistory = () => {
       try {
-        const res = await fetch(`${apiBase}/api/v1/games/matches/history?gameType=pvp_coinflip&limit=20`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) return;
-        const json = await res.json();
-        setSessionHistory((json?.data?.items ?? []).filter((x: any) => Number(x.stake) === Number(stakeAmount)).map((x: any) => ({
-          id: x.id, opponent: x.opponentName ?? "Player", result: x.won ? "win" : "loss",
-          outcome: x.result?.coinFlip ?? "unknown", amount: x.won ? Number(x.payout ?? 0) - Number(x.stake) : Number(x.stake), stake: x.stake, timestamp: x.createdAt,
-        })));
-      } catch {}
+        const key = `bitzimiPvPSession_${stakeAmount}`;
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          setSessionHistory(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error("Error loading session history:", e);
+      }
     };
-    load();
+
+    loadSessionHistory();
   }, [stakeAmount]);
 
-  const addToSessionHistory = (_record: Omit<SessionRecord, "id" | "timestamp">) => {
-    // Backend persists the match; the next refresh reads the authoritative record.
+  // Save session history to localStorage whenever it changes
+  useEffect(() => {
+    if (sessionHistory.length > 0) {
+      try {
+        const key = `bitzimiPvPSession_${stakeAmount}`;
+        localStorage.setItem(key, JSON.stringify(sessionHistory));
+      } catch (e) {
+        console.error("Error saving session history:", e);
+      }
+    }
+  }, [sessionHistory, stakeAmount]);
+
+  // Real-player matchmaking — enter queue, wait for real opponent
+  useEffect(() => {
+    if (hasStarted.current) return;
+    hasStarted.current = true;
+
+    if (balances.game < stakeAmount) {
+      toast.error("Insufficient balance in Game Wallet");
+      navigate("/game/pvp-coinflip");
+      return;
+    }
+
+    const enterQueue = async () => {
+      try {
+        // Private match: skip queue, load pre-created match directly
+        if (privateMatchId) {
+          const match = await gameMatchmakingService.getMatch(privateMatchId);
+          setMatchId(privateMatchId);
+          setMatchData(match);
+          setOpponentName(match.opponent.username);
+          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+          setGameState("matched");
+          setTimeout(() => assignSides(match), 3000);
+          return;
+        }
+
+        const result = await gameMatchmakingService.joinQueue("pvp_coinflip", stakeAmount);
+        if (result.status === "matched" && result.matchId) {
+          const match = await gameMatchmakingService.getMatch(result.matchId);
+          setMatchId(result.matchId);
+          setMatchData(match);
+          setOpponentName(match.opponent.username);
+          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+          setGameState("matched");
+          setTimeout(() => assignSides(match), 3000);
+          return;
+        }
+        if (result.queueId) {
+          setQueueId(result.queueId);
+          pollRef.current = setInterval(async () => {
+            try {
+              const status = await gameMatchmakingService.pollQueue(result.queueId!);
+              if (status.status === "matched" && status.matchId) {
+                clearInterval(pollRef.current!);
+                const match = await gameMatchmakingService.getMatch(status.matchId);
+                setMatchId(status.matchId);
+                setMatchData(match);
+                setOpponentName(match.opponent.username);
+                setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+                setGameState("matched");
+                setTimeout(() => assignSides(match), 3000);
+              } else if (status.status === "cancelled") {
+                clearInterval(pollRef.current!);
+                navigate("/game/pvp-coinflip");
+              }
+            } catch { /* keep polling */ }
+          }, 2000);
+        }
+      } catch {
+        navigate("/game/pvp-coinflip");
+      }
+    };
+
+    enterQueue();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  const assignSides = (md?: any) => {
+    const data = md ?? matchData;
+    if (!data?.result) { navigate("/game/pvp-coinflip"); return; }
+    const isP1 = data.isPlayer1;
+    const assignedPlayerSide: CoinSide   = isP1 ? data.result.p1Side : data.result.p2Side;
+    const assignedOpponentSide: CoinSide = isP1 ? data.result.p2Side : data.result.p1Side;
+    setPlayerSide(assignedPlayerSide);
+    setOpponentSide(assignedOpponentSide);
+    setGameState("side_assignment");
+    setTimeout(() => { startGame(data, assignedPlayerSide); }, 3000);
+  };
+
+  useEffect(() => {
+    if (!matchId) return;
+    fairnessService.getMatchFairness(matchId).then(setFairnessData).catch(() => {});
+  }, [matchId]);
+
+  const startGame = (md: any, _assignedPlayerSide: CoinSide) => {
+    if (!md?.result) { navigate("/game/pvp-coinflip"); return; }
+    transactionRecorded.current = false;
+
+    // Backend already settled — read authoritative coin flip result
+    const result: CoinSide = md.result.coinFlip as CoinSide;
+    const won: boolean      = md.youWon;
+    const gameOpponentName   = md.opponent?.username ?? opponentName;
+    const gameOpponentAvatar = md.opponent?.username?.charAt(0).toUpperCase() ?? opponentAvatar;
+    const totalPot   = stakeAmount * 2;
+    const feeAmount  = Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100));
+    const winnings   = totalPot - feeAmount;
+
+    setPlatformFee(feeAmount);
+    setCoinResult(null);
+    setIsWinner(won);
+    setShowWinner(false);
+    setGameState("flipping");
+
+    setTimeout(() => {
+      setCoinResult(result);
+      if (won) {
+        setWinAmount(winnings);
+        setWinnerAvatar(playerAvatar);
+        setWinnerName(myUsername);
+      } else {
+        setWinAmount(0);
+        setWinnerAvatar(gameOpponentAvatar);
+        setWinnerName(gameOpponentName);
+      }
+      if (!transactionRecorded.current) {
+        transactionRecorded.current = true;
+        refreshWalletsFromBackend().catch(() => {});
+        addToSessionHistory({
+          opponent: gameOpponentName, result: won ? "win" : "loss",
+          outcome: result, amount: won ? winnings - stakeAmount : stakeAmount, stake: stakeAmount,
+        });
+        addGameResult({
+          gameType: "pvp_coinflip", betAmount: stakeAmount,
+          winAmount: won ? winnings : 0, profit: won ? winnings - stakeAmount : -stakeAmount,
+          won, opponent: gameOpponentName, outcome: result,
+        });
+        addNotification(
+          won ? "game_win" : "game_loss",
+          won ? "🎉 Coin Flip Victory!" : "Coin Flip",
+          won
+            ? `Won ${formatCurrencyNoDecimals(winnings - stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`
+            : `Lost ${formatCurrencyNoDecimals(stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`,
+          { game: "coin_flip", stake: stakeAmount, payout: won ? winnings : 0, outcome: result }
+        );
+        if (won) liveActivityService.addActivity("game_win", myUsername, `won in Coin Flip`, winnings - stakeAmount);
+      }
+      setGameState("showing_result");
+      setTimeout(() => {
+        setShowWinner(true);
+        setTimeout(() => { setShowResultPopup(true); }, 2000);
+      }, 2000);
+    }, 2500);
+  };
+
+  const addToSessionHistory = (record: Omit<SessionRecord, "id" | "timestamp">) => {
+    const newRecord: SessionRecord = {
+      ...record,
+      id: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: new Date().toISOString(),
+    };
+    setSessionHistory((prev) => [newRecord, ...prev].slice(0, 10));
   };
 
   const handleExit = () => {
@@ -150,7 +310,7 @@ export default function PvPCoinFlipGame() {
 
           {/* Right: Fairness + Rules Buttons */}
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => verificationId && navigate(`/provably-fair?verificationId=${encodeURIComponent(verificationId)}`)} disabled={!verificationId} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowFairness(true)} className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Verify Fairness</Button>
             <Button
               variant="outline"
               size="sm"
@@ -236,15 +396,6 @@ export default function PvPCoinFlipGame() {
 
           {/* Game Area */}
           <div className="min-h-[280px] flex flex-col items-center justify-center">
-            {/* Ready State */}
-            {gameState === "ready" && (
-              <div className="text-center">
-                <div className="text-lg text-white font-semibold mb-2">Ready to Play?</div>
-                <div className="text-sm text-gray-400 mb-5">Matchmaking starts only after you press Play Now.</div>
-                <Button onClick={handlePlayNow} disabled={balances.game < stakeAmount}>Play Now</Button>
-              </div>
-            )}
-
             {/* Searching State */}
             {gameState === "searching" && (
               <div className="text-center">
@@ -388,6 +539,18 @@ export default function PvPCoinFlipGame() {
           </div>
         </div>
       </Card>
+
+      {/* Fairness Modal */}
+      <FairnessModal
+        isOpen={showFairness}
+        onClose={() => setShowFairness(false)}
+        gameType="pvp_coinflip"
+        serverSeedHash={(matchData as any)?.serverSeedHash ?? ""}
+        serverSeed={fairnessData?.serverSeed ?? null}
+        clientSeed={fairnessData?.clientSeed ?? null}
+        nonce={fairnessData?.nonce ?? null}
+        result={coinResult ? { coinFlip: coinResult, won: isWinner } : undefined}
+      />
 
       {/* Result Popup */}
       <Dialog open={showResultPopup} onOpenChange={setShowResultPopup}>
