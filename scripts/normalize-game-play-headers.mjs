@@ -15,9 +15,7 @@ function replaceSection(path, marker, endMarker, replacement) {
 for (const [path, title, stake, indent] of [
   ["src/app/pages/DiceDuelGame.tsx", "Dice Clash", "stake", "          "],
 ]) {
-  const fairnessPlacement = path.includes("PvPCoinFlipGame")
-    ? `${indent}  <div className="flex items-center justify-start">${fairness}</div>`
-    : `${indent}  <div></div>\n${indent}  <div className="flex items-center justify-end">${fairness}</div>`;
+  const fairnessPlacement = `${indent}  <div></div>\n${indent}  <div className="flex items-center justify-end">${fairness}</div>`;
   const replacement = `/* [Title Row] - Spin Battle-style two-row header */
 ${indent}<div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
 ${indent}  <div className="min-w-0 flex items-center gap-[6px]">
