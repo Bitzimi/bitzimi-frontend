@@ -57,7 +57,7 @@ export interface PrivateRoom {
   stake:             number;
   hostId:            string;
   guestId:           string | null;
-  status:            "waiting" | "ready" | "active" | "rematch" | "completed" | "cancelled";
+  status:             "waiting" | "ready" | "active" | "rematch" | "completed" | "cancelled";
   currentMatchId:    string | null;
   rematchHostReady:  boolean;
   rematchGuestReady: boolean;
@@ -74,7 +74,7 @@ export interface MatchResult {
   totalPool:   number;
   platformFee: number;
   status:      "active" | "settled" | "cancelled";
-  opponent:    { username: string; userId: string };
+  opponent:    { username: string; userId: string; avatar: string };
   result:      Record<string, any> | null;
   winnerId:    string | null;
   youWon:      boolean;
