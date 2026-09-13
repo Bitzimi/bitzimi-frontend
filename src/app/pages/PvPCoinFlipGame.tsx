@@ -25,9 +25,6 @@ type CoinFlipMatchData = MatchResult & { isPlayer1?: boolean };
 interface SessionRecord {
   id: string;
   opponent: string;
-  opponentAvatar?: string;
-  playerName?: string;
-  playerAvatar?: string;
   result: "win" | "loss";
   outcome: CoinSide;
   amount: number;
@@ -287,9 +284,6 @@ export default function PvPCoinFlipGame() {
             transactionRecorded.current = true;
             addToSessionHistory({
               opponent: gameOpponentName,
-              opponentAvatar: gameOpponentAvatar,
-              playerName: myUsername,
-              playerAvatar,
               result: won ? "win" : "loss",
               outcome: result,
               amount: won ? authoritativePayout - stake : stake,
@@ -333,7 +327,7 @@ export default function PvPCoinFlipGame() {
     <ResponsiveLayout>
       <div className="space-y-3 mb-6">
         <div className="flex items-center">
-          <Button variant="outline" size="icon" onClick={handleExit} aria-label="Back to Stake Room" className="h-9 w-9 shrink-0 rounded-full border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-white shadow-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><ArrowLeft className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="sm" onClick={handleExit} className="hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors px-3 -ml-3"><ArrowLeft className="h-4 w-4 mr-2" /><span className="text-sm font-medium">Back to stake room</span></Button>
         </div>
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-baseline gap-[6px]"><h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Coin Flip</h1><span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span></div>
@@ -405,7 +399,7 @@ export default function PvPCoinFlipGame() {
         </div>
       </Card>
 
-      {sessionHistory.length > 0 && (<Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm"><div className="p-4"><h3 className="text-sm font-semibold text-gray-900 dark:text-gray-300 mb-3">Your History (${stakeAmount} Stake)</h3><div className="max-h-[360px] overflow-y-auto overflow-x-hidden pr-1"><div className="space-y-1.5">{sessionHistory.map((record) => (<div key={record.id} className="flex w-full min-w-0 min-h-[30px] items-center gap-1.5 whitespace-nowrap p-1.5 rounded bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50"><div className="w-6 h-6 shrink-0 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 dark:from-gray-600 dark:to-gray-700 flex items-center justify-center text-[10px] overflow-hidden"><PlayerAvatar avatar={record.playerAvatar || identity.avatar} /></div><span className="min-w-0 flex-1 truncate text-[10px] sm:text-xs font-medium text-gray-900 dark:text-gray-200">{record.playerName || myUsername}</span><span className="shrink-0 text-[9px] sm:text-xs text-gray-500">—</span><span className={`shrink-0 text-[9px] sm:text-xs font-semibold px-1.5 py-0.5 rounded ${record.result === "win" ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-red-500/20 text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "WON" : "LOST"}</span><span className={`shrink-0 text-[10px] sm:text-sm font-bold ${record.result === "win" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "+" : "-"}{formatCurrencyNoDecimals(record.amount)}</span><span className="shrink-0 text-[9px] sm:text-xs text-gray-500">vs</span><div className="w-6 h-6 shrink-0 rounded-full bg-gradient-to-br from-gray-400 to-gray-500 dark:from-gray-600 dark:to-gray-700 flex items-center justify-center text-[10px] overflow-hidden"><PlayerAvatar avatar={record.opponentAvatar || record.opponent.charAt(0).toUpperCase()} /></div><span className="min-w-0 flex-1 truncate text-[10px] sm:text-xs text-gray-600 dark:text-gray-300">{record.opponent}</span><span className="shrink-0 text-[9px] sm:text-xs text-gray-500">Result: {record.outcome.toUpperCase()}</span></div>))}</div></div></div></Card>)}
+      {sessionHistory.length > 0 && (<Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm"><div className="p-4"><h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-200 mb-3">Your History (${stakeAmount} Stake)</h3><div className="max-h-[520px] overflow-y-auto overflow-x-hidden pr-1"><div className="space-y-2">{sessionHistory.map((record) => (<div key={record.id} className="flex w-full min-w-0 min-h-[46px] items-center gap-1.5 sm:gap-2 p-2 rounded bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 overflow-hidden"><span className={`shrink-0 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded ${record.result === "win" ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-red-500/20 text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "WIN" : "LOSS"}</span><div className="min-w-0 flex-1 truncate text-[10px] sm:text-xs text-gray-600 dark:text-gray-300"><span className="font-medium text-gray-900 dark:text-gray-200">{myUsername}</span><span className="text-gray-500"> vs </span><span>{record.opponent}</span><span className="text-gray-500"> | Result {record.outcome.toUpperCase()} • </span><span className={`font-bold ${record.result === "win" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "+" : "-"}{formatCurrencyNoDecimals(record.amount)}</span></div></div>))}</div></div></div></Card>)}
 
       <Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm"><div className="p-3"><div className="text-xs text-gray-600 dark:text-gray-400 text-center">Platform fee: {PLATFORM_FEE_PERCENT}% • Winner receives: {formatCurrencyNoDecimals(totalPot - Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100)))}</div></div></Card>
 
