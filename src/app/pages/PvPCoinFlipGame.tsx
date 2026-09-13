@@ -9,7 +9,7 @@ import { useWallet } from "../contexts/WalletContext";
 import { useGameStats } from "../contexts/GameStatsContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { liveActivityService } from "../services/liveActivityService";
-import { gameMatchmakingService, fairnessService, type FairnessData } from '../services/gameMatchmakingService';
+import { gameMatchmakingService, fairnessService, type FairnessData, type MatchResult } from '../services/gameMatchmakingService';
 import { FairnessModal } from "../components/FairnessModal";
 // affiliateCommissionService removed — commissions handled server-side
 import { useIdentity } from "../contexts/IdentityContext";
@@ -26,6 +26,10 @@ import { ProfessionalGoldCoin } from "../components/ProfessionalGoldCoin";
 
 type GameState = "idle" | "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
 type CoinSide = "heads" | "tails";
+
+type CoinFlipMatchData = MatchResult & {
+  isPlayer1?: boolean;
+};
 
 // Avatar is NOT stored in session history — resolved at render time from identity
 interface SessionRecord {
@@ -67,7 +71,7 @@ export default function PvPCoinFlipGame() {
   const [opponentAvatar, setOpponentAvatar] = useState("P");
   const [queueId, setQueueId] = useState<string | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
-  const [matchData, setMatchData] = useState<any>(null);
+  const [matchData, setMatchData] = useState<CoinFlipMatchData | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [winnerAvatar, setWinnerAvatar] = useState<string>("");
   const [winnerName, setWinnerName] = useState<string>("");
@@ -213,7 +217,7 @@ export default function PvPCoinFlipGame() {
     }
   };
 
-  const assignSides = (md?: any) => {
+  const assignSides = (md?: CoinFlipMatchData) => {
     const data = md ?? matchData;
     if (!data?.result) { navigate("/game/pvp-coinflip"); return; }
     const isP1 = data.isPlayer1;
@@ -230,18 +234,18 @@ export default function PvPCoinFlipGame() {
     fairnessService.getMatchFairness(matchId).then(setFairnessData).catch(() => {});
   }, [matchId]);
 
-  const startGame = (md: any, _assignedPlayerSide: CoinSide) => {
+  const startGame = (md: CoinFlipMatchData, _assignedPlayerSide: CoinSide) => {
     if (!md?.result) { navigate("/game/pvp-coinflip"); return; }
     transactionRecorded.current = false;
 
-    // Backend already settled — read authoritative coin flip result
+    // Backend is the single source of truth for the settled match values.
     const result: CoinSide = md.result.coinFlip as CoinSide;
     const won: boolean      = md.youWon;
     const gameOpponentName   = md.opponent?.username ?? opponentName;
     const gameOpponentAvatar = md.opponent?.username?.charAt(0).toUpperCase() ?? opponentAvatar;
-    const totalPot   = stakeAmount * 2;
-    const feeAmount  = Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100));
-    const winnings   = totalPot - feeAmount;
+    const totalPool          = md.totalPool;
+    const payout             = md.payout;
+    const feeAmount          = md.platformFee;
 
     setPlatformFee(feeAmount);
     setCoinResult(null);
@@ -252,7 +256,7 @@ export default function PvPCoinFlipGame() {
     setTimeout(() => {
       setCoinResult(result);
       if (won) {
-        setWinAmount(winnings);
+        setWinAmount(payout);
         setWinnerAvatar(playerAvatar);
         setWinnerName(myUsername);
       } else {
@@ -265,22 +269,22 @@ export default function PvPCoinFlipGame() {
         refreshWalletsFromBackend().catch(() => {});
         addToSessionHistory({
           opponent: gameOpponentName, result: won ? "win" : "loss",
-          outcome: result, amount: won ? winnings - stakeAmount : stakeAmount, stake: stakeAmount,
+          outcome: result, amount: won ? payout - stakeAmount : stakeAmount, stake: stakeAmount,
         });
         addGameResult({
           gameType: "pvp_coinflip", betAmount: stakeAmount,
-          winAmount: won ? winnings : 0, profit: won ? winnings - stakeAmount : -stakeAmount,
+          winAmount: won ? payout : 0, profit: won ? payout - stakeAmount : -stakeAmount,
           won, opponent: gameOpponentName, outcome: result,
         });
         addNotification(
           won ? "game_win" : "game_loss",
           won ? "🎉 Coin Flip Victory!" : "Coin Flip",
           won
-            ? `Won ${formatCurrencyNoDecimals(winnings - stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`
+            ? `Won ${formatCurrencyNoDecimals(payout - stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`
             : `Lost ${formatCurrencyNoDecimals(stakeAmount)} vs ${gameOpponentAvatar} ${gameOpponentName} (${result.toUpperCase()})`,
-          { game: "coin_flip", stake: stakeAmount, payout: won ? winnings : 0, outcome: result }
+          { game: "coin_flip", stake: stakeAmount, payout: won ? payout : 0, outcome: result }
         );
-        if (won) liveActivityService.addActivity("game_win", myUsername, `won in Coin Flip`, winnings - stakeAmount);
+        if (won) liveActivityService.addActivity("game_win", myUsername, `won in Coin Flip`, payout - stakeAmount);
       }
       setGameState("showing_result");
       setTimeout(() => {
@@ -306,6 +310,12 @@ export default function PvPCoinFlipGame() {
 
   const totalPot = stakeAmount * 2;
   const winnerGets = totalPot * 0.9; // 90% after 10% platform fee
+
+  // Pool and Winner remain zero until the backend match has reached side assignment.
+  // Once sides are assigned, display the backend-authoritative match values exactly as returned.
+  const showAuthoritativeMatchStats = gameState === "side_assignment" || gameState === "flipping" || gameState === "showing_result" || gameState === "result_popup";
+  const displayedPool = showAuthoritativeMatchStats && matchData ? matchData.totalPool : 0;
+  const displayedWinner = showAuthoritativeMatchStats && matchData ? matchData.payout : 0;
 
   return (
     <ResponsiveLayout>
@@ -375,13 +385,13 @@ export default function PvPCoinFlipGame() {
               <div className="text-center px-1">
                 <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Pool</div>
                 <div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">
-                  {formatCurrencyNoDecimals(totalPot)}
+                  {formatCurrencyNoDecimals(displayedPool)}
                 </div>
               </div>
               <div className="text-center px-1">
                 <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Winner</div>
                 <div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">
-                  {formatCurrencyNoDecimals(winnerGets)}
+                  {formatCurrencyNoDecimals(displayedWinner)}
                 </div>
               </div>
             </div>
