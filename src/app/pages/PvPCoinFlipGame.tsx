@@ -147,7 +147,7 @@ export default function PvPCoinFlipGame() {
         setMatchId(privateMatchId);
         setMatchData(match);
         setOpponentName(match.opponent.username);
-        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+        setOpponentAvatar(match.opponent.avatar);
         setGameState("matched");
         setTimeout(() => {
           if (!cancelled) assignSides(match);
@@ -182,7 +182,7 @@ export default function PvPCoinFlipGame() {
         setMatchId(result.matchId);
         setMatchData(match);
         setOpponentName(match.opponent.username);
-        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+        setOpponentAvatar(match.opponent.avatar);
         setGameState("matched");
         setTimeout(() => assignSides(match), 3000);
         return;
@@ -199,7 +199,7 @@ export default function PvPCoinFlipGame() {
               setMatchId(status.matchId);
               setMatchData(match);
               setOpponentName(match.opponent.username);
-              setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+              setOpponentAvatar(match.opponent.avatar);
               setGameState("matched");
               setTimeout(() => assignSides(match), 3000);
             } else if (status.status === "cancelled") {
@@ -242,7 +242,7 @@ export default function PvPCoinFlipGame() {
     const result: CoinSide = md.result.coinFlip as CoinSide;
     const won: boolean      = md.youWon;
     const gameOpponentName   = md.opponent?.username ?? opponentName;
-    const gameOpponentAvatar = md.opponent?.username?.charAt(0).toUpperCase() ?? opponentAvatar;
+    const gameOpponentAvatar = md.opponent?.avatar ?? opponentAvatar;
     const totalPool          = md.totalPool;
     const payout             = md.payout;
     const feeAmount          = md.platformFee;
