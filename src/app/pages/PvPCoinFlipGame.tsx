@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ResponsiveLayout } from "../components/ResponsiveLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { ArrowLeft, Info, Shield } from "lucide-react";
+import { ArrowLeft, Info, Search, Shield } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useSettings } from "../contexts/SettingsContext";
 import { useWallet } from "../contexts/WalletContext";
@@ -24,7 +24,7 @@ import {
 } from "../components/ui/dialog";
 import { ProfessionalGoldCoin } from "../components/ProfessionalGoldCoin";
 
-type GameState = "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
+type GameState = "idle" | "searching" | "matched" | "side_assignment" | "flipping" | "showing_result" | "result_popup";
 type CoinSide = "heads" | "tails";
 
 // Avatar is NOT stored in session history — resolved at render time from identity
@@ -53,7 +53,7 @@ export default function PvPCoinFlipGame() {
   const { identity } = useIdentity();
   const myUsername = identity.username;
 
-  const [gameState, setGameState] = useState<GameState>("searching");
+  const [gameState, setGameState] = useState<GameState>("idle");
   const [coinResult, setCoinResult] = useState<CoinSide | null>(null);
   const [isWinner, setIsWinner] = useState<boolean>(false);
   const [winAmount, setWinAmount] = useState<number>(0);
@@ -88,7 +88,7 @@ export default function PvPCoinFlipGame() {
     }
   });
 
-  // Prevent double execution in React Strict Mode
+  // Prevent duplicate matchmaking requests. Public matchmaking is only started by the Search button.
   const hasStarted = useRef(false);
 
   // Track if transaction has been recorded for this game
@@ -123,9 +123,10 @@ export default function PvPCoinFlipGame() {
     }
   }, [sessionHistory, stakeAmount]);
 
-  // Real-player matchmaking — enter queue, wait for real opponent
+  // Private matches are already created elsewhere, so they can continue directly into the match.
+  // Public matchmaking is intentionally NOT started here; it is started only by handleSearch().
   useEffect(() => {
-    if (hasStarted.current) return;
+    if (!privateMatchId || hasStarted.current) return;
     hasStarted.current = true;
 
     if (balances.game < stakeAmount) {
@@ -134,60 +135,83 @@ export default function PvPCoinFlipGame() {
       return;
     }
 
-    const enterQueue = async () => {
+    let cancelled = false;
+    const loadPrivateMatch = async () => {
       try {
-        // Private match: skip queue, load pre-created match directly
-        if (privateMatchId) {
-          const match = await gameMatchmakingService.getMatch(privateMatchId);
-          setMatchId(privateMatchId);
-          setMatchData(match);
-          setOpponentName(match.opponent.username);
-          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-          setGameState("matched");
-          setTimeout(() => assignSides(match), 3000);
-          return;
-        }
-
-        const result = await gameMatchmakingService.joinQueue("pvp_coinflip", stakeAmount);
-        if (result.status === "matched" && result.matchId) {
-          const match = await gameMatchmakingService.getMatch(result.matchId);
-          setMatchId(result.matchId);
-          setMatchData(match);
-          setOpponentName(match.opponent.username);
-          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-          setGameState("matched");
-          setTimeout(() => assignSides(match), 3000);
-          return;
-        }
-        if (result.queueId) {
-          setQueueId(result.queueId);
-          pollRef.current = setInterval(async () => {
-            try {
-              const status = await gameMatchmakingService.pollQueue(result.queueId!);
-              if (status.status === "matched" && status.matchId) {
-                clearInterval(pollRef.current!);
-                const match = await gameMatchmakingService.getMatch(status.matchId);
-                setMatchId(status.matchId);
-                setMatchData(match);
-                setOpponentName(match.opponent.username);
-                setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
-                setGameState("matched");
-                setTimeout(() => assignSides(match), 3000);
-              } else if (status.status === "cancelled") {
-                clearInterval(pollRef.current!);
-                navigate("/game/pvp-coinflip");
-              }
-            } catch { /* keep polling */ }
-          }, 2000);
-        }
+        const match = await gameMatchmakingService.getMatch(privateMatchId);
+        if (cancelled) return;
+        setMatchId(privateMatchId);
+        setMatchData(match);
+        setOpponentName(match.opponent.username);
+        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+        setGameState("matched");
+        setTimeout(() => {
+          if (!cancelled) assignSides(match);
+        }, 3000);
       } catch {
-        navigate("/game/pvp-coinflip");
+        if (!cancelled) navigate("/game/pvp-coinflip");
       }
     };
 
-    enterQueue();
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+    loadPrivateMatch();
+    return () => { cancelled = true; };
+  }, [privateMatchId]);
+
+  // Public matchmaking: this is the ONLY entry point for the Search button.
+  const handleSearch = async () => {
+    if (hasStarted.current || gameState !== "idle") return;
+    hasStarted.current = true;
+
+    if (balances.game < stakeAmount) {
+      hasStarted.current = false;
+      toast.error("Insufficient balance in Game Wallet");
+      navigate("/game/pvp-coinflip");
+      return;
+    }
+
+    setGameState("searching");
+
+    try {
+      const result = await gameMatchmakingService.joinQueue("pvp_coinflip", stakeAmount);
+      if (result.status === "matched" && result.matchId) {
+        const match = await gameMatchmakingService.getMatch(result.matchId);
+        setMatchId(result.matchId);
+        setMatchData(match);
+        setOpponentName(match.opponent.username);
+        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+        setGameState("matched");
+        setTimeout(() => assignSides(match), 3000);
+        return;
+      }
+
+      if (result.queueId) {
+        setQueueId(result.queueId);
+        pollRef.current = setInterval(async () => {
+          try {
+            const status = await gameMatchmakingService.pollQueue(result.queueId!);
+            if (status.status === "matched" && status.matchId) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              const match = await gameMatchmakingService.getMatch(status.matchId);
+              setMatchId(status.matchId);
+              setMatchData(match);
+              setOpponentName(match.opponent.username);
+              setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+              setGameState("matched");
+              setTimeout(() => assignSides(match), 3000);
+            } else if (status.status === "cancelled") {
+              if (pollRef.current) clearInterval(pollRef.current);
+              navigate("/game/pvp-coinflip");
+            }
+          } catch { /* keep polling */ }
+        }, 2000);
+      }
+    } catch {
+      if (pollRef.current) clearInterval(pollRef.current);
+      hasStarted.current = false;
+      setGameState("idle");
+      toast.error("Unable to start matchmaking. Please try again.");
+    }
+  };
 
   const assignSides = (md?: any) => {
     const data = md ?? matchData;
@@ -396,6 +420,23 @@ export default function PvPCoinFlipGame() {
 
           {/* Game Area */}
           <div className="min-h-[280px] flex flex-col items-center justify-center">
+            {/* Idle State - matchmaking starts only when the user explicitly clicks Search */}
+            {gameState === "idle" && (
+              <div className="text-center flex flex-col items-center">
+                <Button
+                  variant="outline"
+                  onClick={handleSearch}
+                  className="rounded-full px-8 py-3 text-base font-semibold border-gray-600 dark:border-gray-500 bg-transparent text-gray-900 dark:text-white hover:bg-gray-800/50 dark:hover:bg-gray-800/70 flex items-center gap-3"
+                >
+                  <Search className="h-6 w-6" />
+                  Search
+                </Button>
+                <div className="text-base text-gray-600 dark:text-gray-300 mt-6">
+                  Stake are deducted when opponent is found
+                </div>
+              </div>
+            )}
+
             {/* Searching State */}
             {gameState === "searching" && (
               <div className="text-center">
