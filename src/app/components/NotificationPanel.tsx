@@ -18,7 +18,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
-  const notificationCountLabel = unreadCount > 100 ? "100+" : unreadCount;
+  const notificationCountLabel = unreadCount > 100 ? <span>100<sup className="relative -top-1 text-[9px] leading-none">+</sup></span> : unreadCount;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
