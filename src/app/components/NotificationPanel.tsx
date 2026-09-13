@@ -18,6 +18,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  const notificationCountLabel = unreadCount > 100 ? "100+" : unreadCount;
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -105,7 +106,7 @@ export function NotificationPanel({ onClose }: NotificationPanelProps) {
             <Bell className="h-5 w-5" />
             <h2 className="text-lg font-semibold">Notifications</h2>
             {unreadCount > 0 && (
-              <Badge className="bg-red-500">{unreadCount} new</Badge>
+              <Badge className="bg-red-500">{notificationCountLabel} new</Badge>
             )}
           </div>
           <div className="flex items-center gap-1">

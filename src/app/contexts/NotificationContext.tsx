@@ -18,18 +18,24 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>(() => { try { const s = localStorage.getItem("bitzimiNotifications"); return s ? JSON.parse(s) : []; } catch { return []; } });
+  const [unreadCount, setUnreadCount] = useState<number>(() => { try { const s = localStorage.getItem("bitzimiNotifications"); const items: Notification[] = s ? JSON.parse(s) : []; return items.filter(n => !n.read).length; } catch { return 0; } });
   useEffect(() => { try { localStorage.setItem("bitzimiNotifications", JSON.stringify(notifications)); } catch {} }, [notifications]);
 
   const refreshFromBackend = useCallback(async () => {
     if (!_NF_API || !_nfToken()) return;
     try {
-      const json = await _nfFetch("/api/v1/notifications?limit=50");
+      const [json, unreadJson] = await Promise.all([
+        _nfFetch("/api/v1/notifications?limit=50"),
+        _nfFetch("/api/v1/notifications/unread-count"),
+      ]);
       if (!json?.data?.items) return;
       const backendItems: Notification[] = json.data.items.map(_fromBackend);
       setNotifications(prev => {
         const backendIds = new Set(backendItems.map(n => n.id));
         const localOnly = prev.filter(n => !backendIds.has(n.id) && n.id.startsWith("local_"));
         const merged = [...backendItems, ...localOnly].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 100);
+        const backendUnread = typeof unreadJson?.data?.count === "number" ? unreadJson.data.count : backendItems.filter(n => !n.read).length;
+        setUnreadCount(backendUnread + localOnly.filter(n => !n.read).length);
         try { localStorage.setItem("bitzimiNotifications", JSON.stringify(merged)); } catch {}
         return merged;
       });
@@ -42,6 +48,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const addLocalNotification = (type: NotificationType, title: string, message: string, metadata?: any) => {
     const n: Notification = { id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`, type, title, message, metadata, timestamp: new Date().toISOString(), read: false };
     setNotifications(prev => [n, ...prev].slice(0, 100));
+    setUnreadCount(prev => prev + 1);
   };
 
   // Game settlement notifications are now created atomically by the backend.
@@ -57,12 +64,33 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }).catch(() => addLocalNotification(type, title, message, metadata));
   };
 
-  const markAsRead = async (id: string) => { setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); if (!id.startsWith("local_")) await _nfFetch(`/api/v1/notifications/${id}/read`, { method: "PATCH" }); };
-  const markAllAsRead = async () => { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); await _nfFetch("/api/v1/notifications/read-all", { method: "POST" }); };
-  const clearNotification = async (id: string) => { setNotifications(prev => prev.filter(n => n.id !== id)); if (!id.startsWith("local_")) await _nfFetch(`/api/v1/notifications/${id}`, { method: "DELETE" }); };
-  const clearSelectedNotifications = async (ids: string[]) => { const idSet = new Set(ids); setNotifications(prev => prev.filter(n => !idSet.has(n.id))); await Promise.all(ids.filter(id => !id.startsWith("local_")).map(id => _nfFetch(`/api/v1/notifications/${id}`, { method: "DELETE" }))); };
-  const clearAllNotifications = async () => { setNotifications([]); localStorage.removeItem("bitzimiNotifications"); await _nfFetch("/api/v1/notifications/all", { method: "DELETE" }); };
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const markAsRead = async (id: string) => {
+    setNotifications(prev => {
+      const target = prev.find(n => n.id === id);
+      if (target && !target.read) setUnreadCount(count => Math.max(0, count - 1));
+      return prev.map(n => n.id === id ? { ...n, read: true } : n);
+    });
+    if (!id.startsWith("local_")) await _nfFetch(`/api/v1/notifications/${id}/read`, { method: "PATCH" });
+  };
+  const markAllAsRead = async () => { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); setUnreadCount(0); await _nfFetch("/api/v1/notifications/read-all", { method: "POST" }); };
+  const clearNotification = async (id: string) => {
+    setNotifications(prev => {
+      const target = prev.find(n => n.id === id);
+      if (target && !target.read) setUnreadCount(count => Math.max(0, count - 1));
+      return prev.filter(n => n.id !== id);
+    });
+    if (!id.startsWith("local_")) await _nfFetch(`/api/v1/notifications/${id}`, { method: "DELETE" });
+  };
+  const clearSelectedNotifications = async (ids: string[]) => {
+    const idSet = new Set(ids);
+    setNotifications(prev => {
+      const removedUnread = prev.filter(n => idSet.has(n.id) && !n.read).length;
+      if (removedUnread > 0) setUnreadCount(count => Math.max(0, count - removedUnread));
+      return prev.filter(n => !idSet.has(n.id));
+    });
+    await Promise.all(ids.filter(id => !id.startsWith("local_")).map(id => _nfFetch(`/api/v1/notifications/${id}`, { method: "DELETE" })));
+  };
+  const clearAllNotifications = async () => { setNotifications([]); setUnreadCount(0); localStorage.removeItem("bitzimiNotifications"); await _nfFetch("/api/v1/notifications/all", { method: "DELETE" }); };
   return <NotificationContext.Provider value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead, clearNotification, clearSelectedNotifications, clearAllNotifications, refreshFromBackend }}>{children}</NotificationContext.Provider>;
 }
 export function useNotifications() { const context = useContext(NotificationContext); if (!context) throw new Error("useNotifications must be used within NotificationProvider"); return context; }
