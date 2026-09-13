@@ -129,8 +129,8 @@ export default function PvPCoinFlipGame() {
     return () => { cancelled = true; };
   }, [privateMatchId]);
 
-  const handleSearch = async () => {
-    if (hasStarted.current || gameState !== "idle") return;
+  const handleSearch = async (forceStart = false) => {
+    if (!forceStart && (hasStarted.current || gameState !== "idle")) return;
     hasStarted.current = true;
     if (balances.game < stakeAmount) {
       hasStarted.current = false;
@@ -180,6 +180,32 @@ export default function PvPCoinFlipGame() {
       setGameState("idle");
       toast.error("Unable to start matchmaking. Please try again.");
     }
+  };
+
+  const handleSearchNewOpponent = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    setShowResultPopup(false);
+    setMatchId(null);
+    setMatchData(null);
+    setQueueId(null);
+    setCoinResult(null);
+    setPlayerSide(null);
+    setOpponentSide(null);
+    setPlayerIsHome(true);
+    setWinnerAvatar("");
+    setWinnerName("");
+    setShowWinner(false);
+    setWinAmount(0);
+    setPlatformFee(0);
+    setIsWinner(false);
+    setOpponentName("");
+    setOpponentAvatar("P");
+    transactionRecorded.current = false;
+    hasStarted.current = false;
+    void handleSearch(true);
   };
 
   const assignSides = (md?: CoinFlipMatchData) => {
@@ -329,7 +355,7 @@ export default function PvPCoinFlipGame() {
           </div>
 
           <div className="min-h-[280px] flex flex-col items-center justify-center">
-            {gameState === "idle" && (<div className="text-center flex flex-col items-center"><Button variant="outline" onClick={handleSearch} className="rounded-full px-8 py-3 text-base font-semibold border-gray-600 dark:border-gray-500 bg-transparent text-gray-900 dark:text-white hover:bg-gray-800/50 dark:hover:bg-gray-800/70 flex items-center gap-3"><Search className="h-6 w-6" />Search</Button><div className="text-base text-gray-600 dark:text-gray-300 mt-6">Stake are deducted when opponent is found</div></div>)}
+            {gameState === "idle" && (<div className="text-center flex flex-col items-center"><Button variant="outline" onClick={() => handleSearch()} className="rounded-full px-8 py-3 text-base font-semibold border-gray-600 dark:border-gray-500 bg-transparent text-gray-900 dark:text-white hover:bg-gray-800/50 dark:hover:bg-gray-800/70 flex items-center gap-3"><Search className="h-6 w-6" />Search</Button><div className="text-base text-gray-600 dark:text-gray-300 mt-6">Stake are deducted when opponent is found</div></div>)}
             {gameState === "searching" && (<div className="text-center"><div className="mb-4"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div></div><div className="text-base text-gray-300">Searching for opponent...</div></div>)}
             {gameState === "matched" && (<div className="text-center"><div className="text-4xl mb-3">✓</div><div className="text-lg text-green-400 font-semibold">Opponent Found!</div><div className="text-sm text-gray-400 mt-2">vs {opponentName}</div></div>)}
 
@@ -376,7 +402,15 @@ export default function PvPCoinFlipGame() {
       <Dialog open={showResultPopup} onOpenChange={setShowResultPopup}>
         <DialogContent className="sm:max-w-md bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border-gray-300 dark:border-gray-700">
           <DialogHeader><DialogTitle className="text-center"><div className="text-5xl mb-3">{isWinner ? "🎉" : "😔"}</div><div className={`text-3xl font-bold ${isWinner ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{isWinner ? `${myUsername} Wins!` : `${myUsername} Lost`}</div></DialogTitle><DialogDescription className="text-center text-gray-700 dark:text-gray-300">{isWinner ? `Congratulations ${myUsername}!` : "Better luck next time!"}</DialogDescription></DialogHeader>
-          <div className="text-center space-y-4"><div><div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Amount</div><div className={`text-3xl font-bold ${isWinner ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{isWinner ? "+" : "-"}{formatCurrencyNoDecimals(isWinner ? winAmount - displayedStake : displayedStake)}</div>{isWinner && (<div className="text-xs text-gray-600 dark:text-gray-500 mt-2">Winnings: {formatCurrencyNoDecimals(winAmount)} (after {PLATFORM_FEE_PERCENT}% fee)</div>)}</div><div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50 rounded p-3"><div className="flex justify-between mb-1"><span>New Balance:</span><span className="text-gray-900 dark:text-white font-semibold">{formatCurrencyNoDecimals(balances.game)}</span></div></div><div className="pt-2"><Button variant="outline" onClick={handleExit} className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">Back to Stake Selection</Button></div></div>
+          <div className="text-center space-y-4">
+            <div className="text-lg font-semibold text-gray-700 dark:text-gray-300">Result {coinResult?.toUpperCase()}</div>
+            <div><div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Amount</div><div className={`text-3xl font-bold ${isWinner ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{isWinner ? "+" : "-"}{formatCurrencyNoDecimals(isWinner ? winAmount - displayedStake : displayedStake)}</div>{isWinner && (<div className="text-xs text-gray-600 dark:text-gray-500 mt-2">Winnings: {formatCurrencyNoDecimals(winAmount)} (after {PLATFORM_FEE_PERCENT}% fee)</div>)}</div>
+            <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800/50 rounded p-3"><div className="flex justify-between mb-1"><span>New Balance:</span><span className="text-gray-900 dark:text-white font-semibold">{formatCurrencyNoDecimals(balances.game)}</span></div></div>
+            <div className="pt-2 flex flex-col items-center gap-2">
+              <Button variant="outline" onClick={handleExit} className="w-fit whitespace-nowrap px-6 bg-transparent hover:bg-gray-800/50 dark:hover:bg-gray-800/70 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">Back to Stake Room</Button>
+              <Button variant="outline" onClick={handleSearchNewOpponent} className="w-fit whitespace-nowrap px-6 bg-transparent hover:bg-gray-800/50 dark:hover:bg-gray-800/70 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300">Search New Opponent</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
