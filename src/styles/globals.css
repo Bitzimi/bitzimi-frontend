@@ -19,14 +19,13 @@ svg image {
   }
 }
 
-/* Coin Flip gameplay header: title + Rules on row 1, Verify Fairness on row 2. */
+/* Coin Flip gameplay header: the Back control is above the title row; title + Rules stay on row 1, Verify Fairness on row 2. */
 @supports selector(:has(*)) {
-  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) {
-    /* The reference header starts directly with the title row; the Back control is not part of it. */
-  }
-
   .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:first-child {
-    display: none !important;
+    display: flex !important;
+    visibility: visible !important;
+    position: relative;
+    z-index: 1;
   }
 
   .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:nth-child(2) {
@@ -59,4 +58,40 @@ svg image {
     grid-row: 2;
     justify-self: start;
   }
+}
+
+/* Coin Flip history: keep touch scrolling available while removing the visible scrollbar and use the full row width. */
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden > .space-y-2 > div {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+}
+
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden > .space-y-2 > div > div {
+  display: contents;
+}
+
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden > .space-y-2 > div > div > span:last-child {
+  margin-left: auto;
+  padding-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden > .space-y-2 > div > div > span:first-child,
+main .max-h-\[520px\].overflow-y-auto.overflow-x-hidden > .space-y-2 > div > div > span:nth-child(3) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
