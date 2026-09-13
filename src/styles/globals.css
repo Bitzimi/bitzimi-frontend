@@ -59,4 +59,31 @@ svg image {
     grid-row: 2;
     justify-self: start;
   }
+
+  /* Coin Flip stats: BET always shows the selected stake. POOL and WINNER stay at $0
+     until side assignment begins. The existing values are revealed once the side-assignment
+     state or the coin is present, so the backend-driven match flow remains untouched. */
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
+    :not(:has(~ .bg-gradient-to-br .text-amber-400))
+    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
+    > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
+    :not(:has(~ .bg-gradient-to-br .text-amber-400))
+    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
+    > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child {
+    font-size: 0 !important;
+  }
+
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
+    :not(:has(~ .bg-gradient-to-br .text-amber-400))
+    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
+    > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child::after,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
+    :not(:has(~ .bg-gradient-to-br .text-amber-400))
+    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
+    > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child::after {
+    content: "$0";
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
 }
