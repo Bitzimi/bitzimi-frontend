@@ -60,30 +60,60 @@ svg image {
     justify-self: start;
   }
 
-  /* Coin Flip stats: BET always shows the selected stake. POOL and WINNER stay at $0
-     until side assignment begins. The existing values are revealed once the side-assignment
-     state or the coin is present, so the backend-driven match flow remains untouched. */
+  /* Coin Flip stats: the React component always renders the selected stake in BET.
+     Pool and Winner are masked at the CSS boundary until the actual side-assignment
+     state is visible. The previous selector checked siblings of the header instead of
+     descendants of it, so it never matched the stats values. */
   .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
-    :not(:has(~ .bg-gradient-to-br .text-amber-400))
-    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
     > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child,
   .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
-    :not(:has(~ .bg-gradient-to-br .text-amber-400))
-    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
     > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child {
     font-size: 0 !important;
   }
 
   .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
-    :not(:has(~ .bg-gradient-to-br .text-amber-400))
-    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
     > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child::after,
   .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info)
-    :not(:has(~ .bg-gradient-to-br .text-amber-400))
-    :not(:has(~ .bg-gradient-to-br .relative.w-44.h-44))
     > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child::after {
     content: "$0";
     font-size: 0.875rem;
     line-height: 1.25rem;
+  }
+
+  /* Once sides are assigned, reveal the existing backend-driven match values.
+     The coin is also a valid post-assignment marker for the flip/result states. */
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .text-amber-400)
+    > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .text-amber-400)
+    > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .relative.w-44.h-44)
+    > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .relative.w-44.h-44)
+    > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child {
+    font-size: 0.875rem !important;
+  }
+
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .text-amber-400)
+    > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child::after,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .text-amber-400)
+    > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child::after,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .relative.w-44.h-44)
+    > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child::after,
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .relative.w-44.h-44)
+    > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child::after {
+    content: none !important;
+  }
+
+  @media (min-width: 768px) {
+    .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .text-amber-400)
+      > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child,
+    .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .text-amber-400)
+      > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child,
+    .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .relative.w-44.h-44)
+      > [class*="bg-white/80"] > div > div > div:nth-child(2) > div:last-child,
+    .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info):has(.bg-gradient-to-br .relative.w-44.h-44)
+      > [class*="bg-white/80"] > div > div > div:nth-child(3) > div:last-child {
+      font-size: 1rem !important;
+    }
   }
 }
