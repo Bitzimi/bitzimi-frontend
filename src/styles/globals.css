@@ -19,35 +19,44 @@ svg image {
   }
 }
 
-
-/* Coin Flip gameplay header: title/stake + Rules on row 1, Verify Fairness on row 2. */
+/* Coin Flip gameplay header: title + Rules on row 1, Verify Fairness on row 2. */
 @supports selector(:has(*)) {
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) {
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) {
+    /* The reference header starts directly with the title row; the Back control is not part of it. */
+  }
+
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:first-child {
+    display: none !important;
+  }
+
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:nth-child(2) {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: .5rem 1rem;
+    grid-template-rows: auto auto;
+    column-gap: 1rem;
+    row-gap: 0.75rem;
     align-items: center;
   }
 
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:first-child {
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:nth-child(2) > div:first-child {
     grid-column: 1;
     grid-row: 1;
+    min-width: 0;
   }
 
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div:last-child {
-    display: contents;
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:nth-child(2) > div:nth-child(2) {
+    display: contents !important;
   }
 
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-info) {
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:nth-child(2) > div:nth-child(2) > button:has(svg.lucide-info) {
     grid-column: 2;
     grid-row: 1;
     justify-self: end;
   }
 
-  .flex.items-center.justify-between.gap-4:has(> div > button:has(svg.lucide-shield)):has(> div > button:has(svg.lucide-info)) > div > button:has(svg.lucide-shield) {
+  .space-y-3.mb-6:has(> div > div > button svg.lucide-shield):has(> div > div > button svg.lucide-info) > div:nth-child(2) > div:nth-child(2) > button:has(svg.lucide-shield) {
     grid-column: 1;
     grid-row: 2;
     justify-self: start;
-    width: min(100%, 528px);
   }
 }
