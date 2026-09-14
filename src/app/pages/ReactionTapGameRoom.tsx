@@ -63,7 +63,6 @@ export default function ReactionTapGameRoom() {
   const { addGameResult }  = useGameStats();
   const { identity } = useIdentity();
 
-  useEffect(() => { gameMatchmakingService.getGameConfig("reaction_tap").catch(() => {}); }, []);
   const myUsername   = identity.username;
 
   // ── Core game state ──────────────────────────────────────────────────────────
