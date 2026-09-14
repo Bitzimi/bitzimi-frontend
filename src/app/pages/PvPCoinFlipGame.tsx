@@ -327,7 +327,6 @@ export default function PvPCoinFlipGame() {
         }
         scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });
       });
-    }, 2500);
   };
 
   const addToSessionHistory = (record: Omit<SessionRecord, "id" | "timestamp">) => {
