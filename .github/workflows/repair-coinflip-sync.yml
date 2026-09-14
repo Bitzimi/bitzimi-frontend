@@ -19,10 +19,18 @@ jobs:
           from pathlib import Path
           p = Path('src/app/pages/PvPCoinFlipGame.tsx')
           s = p.read_text()
-          bad = '''        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      }, 2000);'''
-          good = '''        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      });'''
-          assert bad in s, 'Expected synchronized lifecycle closure not found'
-          s = s.replace(bad, good, 1)
+          replacements = [
+              ('        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      }, 2000);',
+               '        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      });'),
+              ('        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      });\n    }, 2500);',
+               '        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      });'),
+          ]
+          changed = False
+          for bad, good in replacements:
+              if bad in s:
+                  s = s.replace(bad, good, 1)
+                  changed = True
+          assert changed, 'No targeted lifecycle closure needed repair'
           p.write_text(s)
       - name: Commit repair
         run: |
