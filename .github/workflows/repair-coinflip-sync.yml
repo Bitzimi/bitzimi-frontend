@@ -1,0 +1,34 @@
+name: Repair Coin Flip Sync Patch
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Repair synchronized lifecycle code
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/app/pages/PvPCoinFlipGame.tsx')
+          s = p.read_text()
+          bad = '''        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      }, 2000);'''
+          good = '''        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });\n      });'''
+          assert bad in s, 'Expected synchronized lifecycle closure not found'
+          s = s.replace(bad, good, 1)
+          p.write_text(s)
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/PvPCoinFlipGame.tsx
+          git diff --cached --check
+          git commit -m "Repair Coin Flip synchronized lifecycle" || exit 0
+          git push
