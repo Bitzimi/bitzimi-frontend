@@ -81,6 +81,8 @@ export interface MatchResult {
   createdAt:   string;
   settledAt:   string | null;
   signalSentAt:string | null;
+  serverNow: number;
+  lifecycleStartedAt: number;
   yourReady:   boolean;
   opponentReady:boolean;
 }

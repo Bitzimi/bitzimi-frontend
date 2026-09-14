@@ -34,6 +34,14 @@ interface SessionRecord {
 
 const PLATFORM_FEE_PERCENT = 10;
 
+const COIN_FLIP_PHASE_MS = {
+  sideAssignment: 3000,
+  flipping: 6000,
+  reveal: 8500,
+  winner: 10500,
+  popup: 12500,
+};
+
 export default function PvPCoinFlipGame() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -80,6 +88,21 @@ export default function PvPCoinFlipGame() {
 
   const hasStarted = useRef(false);
   const transactionRecorded = useRef(false);
+  const syncTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearSyncTimers = () => {
+    syncTimersRef.current.forEach(clearTimeout);
+    syncTimersRef.current = [];
+  };
+
+  const scheduleMatchPhase = (md: CoinFlipMatchData, phaseOffsetMs: number, callback: () => void) => {
+    const serverClockOffset = md.serverNow - Date.now();
+    const targetServerTime = md.lifecycleStartedAt + phaseOffsetMs;
+    const delay = Math.max(0, targetServerTime - (Date.now() + serverClockOffset));
+    const timer = setTimeout(callback, delay);
+    syncTimersRef.current.push(timer);
+    return timer;
+  };
 
   useEffect(() => {
     const loadSessionHistory = () => {
@@ -120,7 +143,7 @@ export default function PvPCoinFlipGame() {
         setOpponentAvatar(match.opponent.avatar);
         await refreshWalletsFromBackend();
         setGameState("matched");
-        setTimeout(() => { if (!cancelled) assignSides(match); }, 3000);
+        scheduleMatchPhase(match, COIN_FLIP_PHASE_MS.sideAssignment, () => { if (!cancelled) assignSides(match); });
       } catch {
         if (!cancelled) navigate("/game/pvp-coinflip");
       }
@@ -149,7 +172,7 @@ export default function PvPCoinFlipGame() {
         setOpponentAvatar(match.opponent.avatar);
         await refreshWalletsFromBackend();
         setGameState("matched");
-        setTimeout(() => assignSides(match), 3000);
+        scheduleMatchPhase(match, COIN_FLIP_PHASE_MS.sideAssignment, () => assignSides(match));
         return;
       }
       if (result.queueId) {
@@ -166,13 +189,13 @@ export default function PvPCoinFlipGame() {
               setOpponentAvatar(match.opponent.avatar);
               await refreshWalletsFromBackend();
               setGameState("matched");
-              setTimeout(() => assignSides(match), 3000);
+              scheduleMatchPhase(match, COIN_FLIP_PHASE_MS.sideAssignment, () => assignSides(match));
             } else if (status.status === "cancelled") {
               if (pollRef.current) clearInterval(pollRef.current);
               navigate("/game/pvp-coinflip");
             }
           } catch { /* keep polling */ }
-        }, 2000);
+        }, 250);
       }
     } catch {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -187,6 +210,7 @@ export default function PvPCoinFlipGame() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    clearSyncTimers();
     setShowResultPopup(false);
     setMatchId(null);
     setMatchData(null);
@@ -218,7 +242,7 @@ export default function PvPCoinFlipGame() {
     setPlayerSide(assignedPlayerSide);
     setOpponentSide(assignedOpponentSide);
     setGameState("side_assignment");
-    setTimeout(() => { startGame(data, assignedPlayerSide, data.matchId); }, 3000);
+    scheduleMatchPhase(data, COIN_FLIP_PHASE_MS.flipping, () => { startGame(data, assignedPlayerSide, data.matchId); });
   };
 
   useEffect(() => {
@@ -243,7 +267,7 @@ export default function PvPCoinFlipGame() {
     setShowWinner(false);
     setGameState("flipping");
 
-    setTimeout(() => {
+    scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.reveal, () => {
       setCoinResult(result);
       if (won) {
         setWinAmount(payout);
@@ -255,7 +279,7 @@ export default function PvPCoinFlipGame() {
         setWinnerName(gameOpponentName);
       }
       setGameState("showing_result");
-      setTimeout(async () => {
+      scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.winner, async () => {
         setShowWinner(true);
         try {
           let settlement: { settled: boolean; winnerId: string; payout: number } | null = null;
@@ -301,7 +325,7 @@ export default function PvPCoinFlipGame() {
         } catch (error) {
           console.error("Coin Flip settlement acknowledgement failed:", error);
         }
-        setTimeout(() => { setShowResultPopup(true); }, 2000);
+        scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });
       }, 2000);
     }, 2500);
   };
@@ -399,9 +423,11 @@ export default function PvPCoinFlipGame() {
         </div>
       </Card>
 
+            <Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm"><div className="p-3"><div className="text-xs text-gray-600 dark:text-gray-400 text-center">Platform fee: {PLATFORM_FEE_PERCENT}% • Winner receives: {formatCurrencyNoDecimals(totalPot - Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100)))}</div></div></Card>
+
       {sessionHistory.length > 0 && (<Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm"><div className="p-4"><h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-200 mb-3">Your History (${stakeAmount} Stake)</h3><div className="max-h-[520px] overflow-y-auto overflow-x-hidden pr-1"><div className="space-y-2">{sessionHistory.map((record) => (<div key={record.id} className="flex w-full min-w-0 min-h-[46px] items-center gap-1.5 sm:gap-2 p-2 rounded bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700/50 overflow-hidden"><span className={`shrink-0 text-[10px] sm:text-xs font-semibold px-2 py-1 rounded ${record.result === "win" ? "bg-green-500/20 text-green-600 dark:text-green-400" : "bg-red-500/20 text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "WIN" : "LOSS"}</span><div className="min-w-0 flex-1 truncate text-[10px] sm:text-xs text-gray-600 dark:text-gray-300"><span className="font-medium text-gray-900 dark:text-gray-200">{myUsername}</span><span className="text-gray-500"> vs </span><span>{record.opponent}</span><span className="text-gray-500"> | Result {record.outcome.toUpperCase()} • </span><span className={`font-bold ${record.result === "win" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{record.result === "win" ? "+" : "-"}{formatCurrencyNoDecimals(record.amount)}</span></div></div>))}</div></div></div></Card>)}
 
-      <Card className="mt-4 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 shadow-sm"><div className="p-3"><div className="text-xs text-gray-600 dark:text-gray-400 text-center">Platform fee: {PLATFORM_FEE_PERCENT}% • Winner receives: {formatCurrencyNoDecimals(totalPot - Math.floor(totalPot * (PLATFORM_FEE_PERCENT / 100)))}</div></div></Card>
+
 
       <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} gameType="pvp_coinflip" serverSeedHash={(matchData as any)?.serverSeedHash ?? ""} serverSeed={fairnessData?.serverSeed ?? null} clientSeed={fairnessData?.clientSeed ?? null} nonce={fairnessData?.nonce ?? null} result={coinResult ? { coinFlip: coinResult, won: isWinner } : undefined} />
 
