@@ -6,7 +6,7 @@ on:
 
 jobs:
   apply:
-    if: contains(github.event.head_commit.message, '[apply-coinflip-fix]')
+    if: true
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -69,21 +69,12 @@ jobs:
           assert marker in s
           s = s.replace(marker, replacement, 1)
           service.write_text(s)
-
-          backend = Path('../bitzimi-backend/src/modules/games/matchmaking/coinFlipMatchmaking.service.ts')
-          if backend.exists():
-              b = backend.read_text()
-              marker = '  return { matchId: match.id, gameType: match.gameType, stake: match.stake, totalPool, platformFee: fee, status: match.status, isPlayer1, playerIsHome: resultData?.homePlayerId === userId, opponent: { username: opponentUsername, userId: opponent.id, avatar: opponentAvatar }, result: resultData, winnerId: match.winnerId ?? resultData?.winnerId ?? null, youWon: (match.winnerId ?? resultData?.winnerId) === userId, payout: totalPool - fee, verificationId: match.verificationId, createdAt: match.createdAt.toISOString(), settledAt: match.settledAt?.toISOString() ?? null, signalSentAt: null, yourReady: false, opponentReady: false };'
-              replacement = '  return { matchId: match.id, gameType: match.gameType, stake: match.stake, totalPool, platformFee: fee, status: match.status, isPlayer1, playerIsHome: resultData?.homePlayerId === userId, opponent: { username: opponentUsername, userId: opponent.id, avatar: opponentAvatar }, result: resultData, winnerId: match.winnerId ?? resultData?.winnerId ?? null, youWon: (match.winnerId ?? resultData?.winnerId) === userId, payout: totalPool - fee, verificationId: match.verificationId, createdAt: match.createdAt.toISOString(), settledAt: match.settledAt?.toISOString() ?? null, signalSentAt: null, serverNow: Date.now(), lifecycleStartedAt: match.createdAt.getTime(), yourReady: false, opponentReady: false };'
-              assert marker in b
-              b = b.replace(marker, replacement, 1)
-              backend.write_text(b)
           
       - name: Commit targeted changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app/pages/PvPCoinFlipGame.tsx src/app/services/gameMatchmakingService.ts src/styles/globals.css
+          git add src/app/pages/PvPCoinFlipGame.tsx src/app/services/gameMatchmakingService.ts
           git diff --cached --check
           git diff --cached --name-only
           git commit -m "Fix Coin Flip platform card and synchronized lifecycle" || exit 0
