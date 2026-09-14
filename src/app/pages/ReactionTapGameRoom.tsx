@@ -290,7 +290,7 @@ export default function ReactionTapGameRoom() {
       setShowResultPopup(true);
       setHistoryKey(k => k + 1);
     }, 500);
-  }, [stakeAmount, opponentName, opponentAvatar, myUsername, refreshWalletsFromBackend, addGameResult, addNotification, formatCurrencyNoDecimals, stopAllTimers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stakeAmount, opponentName, opponentAvatar, myUsername, refreshWalletsFromBackend, addGameResult, formatCurrencyNoDecimals, stopAllTimers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Enter matchmaking queue ────────────────────────────────────────────────────
   const enterQueue = useCallback(async (sid: string) => {
