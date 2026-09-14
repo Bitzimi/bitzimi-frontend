@@ -326,7 +326,7 @@ export default function PvPCoinFlipGame() {
           console.error("Coin Flip settlement acknowledgement failed:", error);
         }
         scheduleMatchPhase(md, COIN_FLIP_PHASE_MS.popup, () => { setShowResultPopup(true); });
-      }, 2000);
+      });
     }, 2500);
   };
 
