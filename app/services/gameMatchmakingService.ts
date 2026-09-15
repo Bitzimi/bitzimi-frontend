@@ -9,6 +9,7 @@
  *   GET    /api/v1/games/queue/:id           — poll queue status
  *   DELETE /api/v1/games/queue/:id           — leave queue
  *   GET    /api/v1/games/matches/:id         — poll match result
+ *   POST   /api/v1/games/matches/:id/settle  — settle Coin Flip after result reveal
  *   POST   /api/v1/games/matches/:id/ready   — ReactionTap signal ready
  *   POST   /api/v1/games/matches/:id/tap     — ReactionTap submit tap
  *   GET    /api/v1/games/dice-royale/rounds  — view Royale round for stake
@@ -86,6 +87,13 @@ export interface MatchResult {
   opponentReady:boolean;
 }
 
+export interface GameConfig {
+  gameType: string;
+  feeRate: number;
+  feePercent: number;
+  stakes: number[];
+}
+
 export const gameMatchmakingService = {
   /** Join matchmaking queue for a 1v1 game. Returns immediately if matched. */
   async joinQueue(gameType: MatchGameType, stake: number): Promise<QueueResult> {
@@ -108,6 +116,11 @@ export const gameMatchmakingService = {
   /** Poll match state until status !== "active". */
   async getMatch(matchId: string): Promise<MatchResult> {
     return apiFetch(`/api/v1/games/matches/${matchId}`);
+  },
+
+  /** Fetch authoritative game configuration used by the UI. */
+  async getGameConfig(gameType: MatchGameType): Promise<GameConfig> {
+    return apiFetch(`/api/v1/games/config/${gameType}`);
   },
 
   /** ReactionTap: signal you are ready to see the signal. */
