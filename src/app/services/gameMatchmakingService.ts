@@ -87,6 +87,13 @@ export interface MatchResult {
   opponentReady:boolean;
 }
 
+export interface GameConfig {
+  gameType: string;
+  feeRate: number;
+  feePercent: number;
+  stakes: number[];
+}
+
 export const gameMatchmakingService = {
   async joinQueue(gameType: MatchGameType, stake: number): Promise<QueueResult> {
     return apiFetch("/api/v1/games/queue", { method: "POST", body: JSON.stringify({ gameType, stake }) });
@@ -99,6 +106,9 @@ export const gameMatchmakingService = {
   },
   async getMatch(matchId: string): Promise<MatchResult> {
     return apiFetch(`/api/v1/games/matches/${matchId}`);
+  },
+  async getGameConfig(gameType: MatchGameType): Promise<GameConfig> {
+    return apiFetch(`/api/v1/games/config/${gameType}`);
   },
   async settleCoinFlip(matchId: string): Promise<{ settled: boolean; winnerId: string; payout: number }> {
     return apiFetch(`/api/v1/games/matches/${matchId}/settle`, { method: "POST", body: "{}" });
