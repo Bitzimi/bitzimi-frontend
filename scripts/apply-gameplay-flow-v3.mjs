@@ -12,23 +12,8 @@ const write = (p, s) => fs.writeFileSync(p, s);
   write(p, s);
 }
 
-{
-  const p = "src/app/pages/ReactionTapGameRoom.tsx";
-  let s = read(p);
-  s = s.replace('  | "idle"\n  | "searching"', '  | "ready"\n  | "searching"');
-  s = s.replace('useState<GameState>("idle")', 'useState<GameState>("ready")');
-  const idle = '            {gameState === "idle" && (\n              <div className="text-center"><Button onClick={() => setGameState("searching")} className="px-10 py-5 text-lg">Search</Button></div>\n            )}\n\n';
-  s = s.replace(idle, '');
-  const headerDuplicate = '            <div className="min-w-0 flex items-center gap-[6px]">\n              <span className="text-sm text-gray-500 whitespace-nowrap">Reaction Tap - Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>\n            </div>\n';
-  s = s.replace(headerDuplicate, '            <div></div>\n');
-  if (!s.includes('const [feeRate, setFeeRate]')) {
-    const marker = '  const myUsername   = identity.username;';
-    s = s.replace(marker, '  const myUsername   = identity.username;\n  const [feeRate, setFeeRate] = useState(0);\n  useEffect(() => { gameMatchmakingService.getGameConfig("reaction_tap").then(c => setFeeRate(Number(c.feeRate) || 0)).catch(() => {}); }, []);');
-  }
-  s = s.replace('  const winnerPayout    = Number(winAmount || 0) || 0;', '  const totalPoolDisplay = matchId ? stakeAmount * 2 : stakeAmount;\n  const winnerPayout    = Number(winAmount || (feeRate > 0 ? stakeAmount * (1 - feeRate) : 0)) || 0;');
-  s = s.replace('{formatCurrencyNoDecimals(stakeAmount * 2)}', '{formatCurrencyNoDecimals(totalPoolDisplay)}');
-  write(p, s);
-}
+// Reaction Tap intentionally remains on its original app/ implementation.
+// Do not inject the newer header/config presentation into src/app.
 
 {
   const p = "src/app/hooks/useGlobalGameMonitor.tsx";
