@@ -53,37 +53,7 @@ ${indent}</div>
   replaceSection(path, "/* [Title Row]", "/* Game Rules Panel */", replacement);
 }
 
-// Reaction Tap has no fairness control. It keeps the title/stake only on row 1;
-// row 2 left is intentionally empty and Rules remains on the right.
-{
-  const path = "src/app/pages/ReactionTapGameRoom.tsx";
-  const s = fs.readFileSync(path, "utf8");
-  const markers = [
-    "        {/* Header - Spin Battle-style two-row layout; Reaction Tap has no fairness control */}",
-    "        {/* Header */}",
-  ];
-  const start = markers.map(m => s.indexOf(m)).find(i => i >= 0) ?? -1;
-  const end = s.indexOf("        {showRules && (", start);
-  if (start < 0 || end < 0) throw new Error(`${path}: header boundaries not found`);
-  const replacement = `        {/* Header - Spin Battle-style two-row layout; Reaction Tap has no fairness control */}
-        <div className="mb-4 sm:mb-6">
-          <Button variant="ghost" size="sm" onClick={handleExit}
-            className="mb-3 sm:mb-4 -ml-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
-            <ArrowLeft className="h-4 w-4 mr-2" />Exit Room
-          </Button>
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center">
-            <div className="min-w-0 flex items-center gap-[6px]">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Tap</h1>
-              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
-            </div>
-            <div className="flex items-center justify-end">
-              <Button variant="outline" size="sm" onClick={() => setShowRules(v => !v)} className="shrink-0">
-                <Info className="h-4 w-4 mr-2" />Rules
-              </Button>
-            </div>
-            <div></div>
-          </div>
-        </div>
-`;
-  fs.writeFileSync(path, s.slice(0, start) + replacement + s.slice(end));
-}
+// Reaction Tap is intentionally sourced from app/pages/ReactionTapGameRoom.tsx.
+// Do not rewrite its original UI during the build.
+
+console.log("Normalized game-play headers.");
