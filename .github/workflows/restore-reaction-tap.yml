@@ -1,0 +1,26 @@
+name: Restore Reaction Tap source
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore src/app Reaction Tap from app/
+        run: |
+          cp app/pages/ReactionTapGameRoom.tsx src/app/pages/ReactionTapGameRoom.tsx
+          cp app/pages/ReactionTapStakeSelection.tsx src/app/pages/ReactionTapStakeSelection.tsx
+          cp app/pages/ReactionTapPrivate.tsx src/app/pages/ReactionTapPrivate.tsx
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/pages/ReactionTapGameRoom.tsx src/app/pages/ReactionTapStakeSelection.tsx src/app/pages/ReactionTapPrivate.tsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "restore: Reaction Tap original design from app"
+          git push
