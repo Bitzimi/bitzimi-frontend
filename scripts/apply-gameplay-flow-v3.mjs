@@ -34,6 +34,13 @@ const write = (p, s) => fs.writeFileSync(p, s);
     'const [gameState,        setGameState]        = useState<GameState>(privateMatchId ? "searching" : "idle");'
   );
 
+  if (!s.includes('const [matchData,        setMatchData]')) {
+    s = s.replace(
+      'const [matchId,          setMatchId]          = useState<string | null>(null);',
+      'const [matchId,          setMatchId]          = useState<string | null>(null);\n  const [matchData,        setMatchData]        = useState<MatchResult | null>(null);'
+    );
+  }
+
   const handleSearchBlock = `
   // ── Explicit matchmaking trigger ─────────────────────────────────────────────
   const handleSearch = useCallback(() => {
@@ -52,6 +59,59 @@ const write = (p, s) => fs.writeFileSync(p, s);
     '    const sid = sessionId.current;\n    enterQueue(sid);\n    return () => stopAllTimers();',
     '    const sid = sessionId.current;\n    // Private matches enter their pre-created room immediately. Quick Match waits\n    // for the user to press Search in the already-open game room.\n    if (privateMatchId) enterQueue(sid);\n    return () => stopAllTimers();'
   );
+
+  // Reaction Tap must use the backend-provided participant avatar, just like Coin Flip.
+  // Keep the username initial only as the existing backend fallback.
+  s = s.replaceAll(
+    'setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());',
+    'setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());'
+  );
+
+  // Retain the complete match response so the stats card can use backend-authoritative
+  // stake/pool/payout values instead of deriving them in the frontend.
+  s = s.replaceAll(
+    'setMatchId(privateMatchId);\n        setOpponentName(match.opponent.username);',
+    'setMatchId(privateMatchId);\n        setMatchData(match);\n        setOpponentName(match.opponent.username);'
+  );
+  s = s.replaceAll(
+    'setMatchId(res.matchId);\n        setOpponentName(match.opponent.username);',
+    'setMatchId(res.matchId);\n        setMatchData(match);\n        setOpponentName(match.opponent.username);'
+  );
+  s = s.replaceAll(
+    'setMatchId(status.matchId);\n              setOpponentName(match.opponent.username);',
+    'setMatchId(status.matchId);\n              setMatchData(match);\n              setOpponentName(match.opponent.username);'
+  );
+  s = s.replace(
+    '    const voided     = match.status === "cancelled";\n',
+    '    setMatchData(match);\n\n    const voided     = match.status === "cancelled";\n'
+  );
+
+  // Use the same three-column card semantics as Coin Flip: Bet | Pool | Winner.
+  // Before a match exists, Pool and Winner remain $0. Once a match exists, values
+  // come from the backend match response; no pool/payout arithmetic is performed here.
+  const oldStatsPattern = /            \{\/\* Stats bar \*\/\}\n            <Card className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-800">[\s\S]*?            <\/Card>\n\n            \{\/\* Searching \*\/\}/;
+  const newStatsBlock = `            {/* Stats bar — same structure and state semantics as Coin Flip */}
+            <Card className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-3 sm:p-4">
+                <div className="grid grid-cols-3 gap-2 divide-x divide-gray-200 dark:divide-gray-700">
+                  <div className="text-center px-1">
+                    <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Bet</div>
+                    <div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(matchData?.stake ?? stakeAmount)}</div>
+                  </div>
+                  <div className="text-center px-1">
+                    <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Pool</div>
+                    <div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(matchData?.totalPool ?? 0)}</div>
+                  </div>
+                  <div className="text-center px-1">
+                    <div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Winner</div>
+                    <div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals((matchData as any)?.winnerPayout ?? matchData?.payout ?? 0)}</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Searching */}`;
+  s = s.replace(oldStatsPattern, newStatsBlock);
 
   const idleMarkup = `            {/* Idle — same Reaction Tap room, matchmaking starts only after Search */}
             {gameState === "idle" && (
