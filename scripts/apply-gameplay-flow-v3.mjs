@@ -23,6 +23,10 @@ const write = (p, s) => fs.writeFileSync(p, s);
     'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp } from "lucide-react";',
     'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp, Search } from "lucide-react";'
   );
+  s = s.replace(
+    'import { PlayerAvatar } from "../components/PlayerAvatar";',
+    'import { PlayerAvatar } from "../../src/app/components/PlayerAvatar";'
+  );
 
   s = s.replace(
     'type GameState =\n  | "searching"',
