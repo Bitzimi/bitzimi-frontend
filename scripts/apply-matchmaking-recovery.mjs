@@ -33,6 +33,13 @@ const write = (p, s) => fs.writeFileSync(p, s);
     );
   }
 
+  // An existing match has already had its stake deducted by the backend. Recovery must
+  // never require the user to have another stake available just to reconnect to that match.
+  s = s.replace(
+    '    if (balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/pvp-coinflip");\n      return;\n    }',
+    '    if (!privateMatchId && balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/pvp-coinflip");\n      return;\n    }'
+  );
+
   const marker = '\n  const handleSearchNewOpponent = () => {';
   if (!s.includes('Matchmaking recovery — resume the existing backend search')) {
     const recoveryBlock = `
@@ -66,7 +73,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
 }
 
 // Reaction Tap: its existing build-time UI/flow transformation remains authoritative;
-// this patch adds only recovery-search handling and the backend lease heartbeat.
+// this patch adds only recovery-search handling, active-match phase recovery, and the backend lease heartbeat.
 {
   const p = "app/pages/ReactionTapGameRoom.tsx";
   let s = read(p);
@@ -78,9 +85,70 @@ const write = (p, s) => fs.writeFileSync(p, s);
     );
   }
 
+  // An existing match has already had its stake deducted by the backend; reconnecting must not
+  // fail a balance check intended only for a brand-new matchmaking attempt.
+  s = s.replace(
+    '    if (balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/reaction-tap");\n      return;\n    }',
+    '    if (!privateMatchId && !recoverySearch && balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/reaction-tap");\n      return;\n    }'
+  );
+
   s = s.replace(
     '    if (privateMatchId) enterQueue(sid);',
     '    if (privateMatchId || recoverySearch) enterQueue(sid);'
+  );
+
+  if (!s.includes('const recoverActiveMatch = useCallback')) {
+    const marker = '\n  // ── Enter matchmaking queue ────────────────────────────────────────────────────';
+    const recoveryFunction = `
+  // Re-enter an already-created Reaction Tap match at its backend-authoritative phase.
+  const recoverActiveMatch = useCallback((sid: string, match: MatchResult) => {
+    if (sessionId.current !== sid) return;
+    setMatchId(match.matchId);
+    matchIdRef.current = match.matchId;
+    isPlayer1Ref.current = Boolean(match.isPlayer1);
+    setOpponentName(match.opponent.username);
+    setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());
+
+    if (match.signalSentAt) {
+      const signalAt = new Date(match.signalSentAt).getTime();
+      signalSentAtRef.current = signalAt;
+      if (signalAt <= Date.now()) {
+        setGameState("signal_shown");
+        liveTimerRef.current = setInterval(() => {
+          if (sessionId.current !== sid) { clearInterval(liveTimerRef.current!); return; }
+          if (signalSentAtRef.current) setLiveReactionTime(Date.now() - signalSentAtRef.current);
+        }, 10);
+      } else {
+        startWaitingPhase(sid, signalAt);
+      }
+      return;
+    }
+
+    setGameState("matched");
+    const elapsed = Math.max(0, Date.now() - match.lifecycleStartedAt);
+    const remainingCountdown = Math.max(0, 5000 - elapsed);
+    if (match.yourReady || match.opponentReady || remainingCountdown === 0) {
+      void startSignalingPhase(sid, match.matchId);
+    } else {
+      setTimeout(() => {
+        if (sessionId.current === sid) void startSignalingPhase(sid, match.matchId);
+      }, remainingCountdown);
+    }
+  }, [startSignalingPhase, startWaitingPhase]);
+`;
+    if (!s.includes(marker)) throw new Error("Reaction Tap recovery insertion marker not found");
+    s = s.replace(marker, `${recoveryFunction}${marker}`);
+  }
+
+  // Private-match/recovered-match entry uses the same backend state instead of restarting the round.
+  s = s.replace(
+    '        setMatchId(privateMatchId);\n        setOpponentName(match.opponent.username);\n        setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());\n        setGameState("matched");\n        setTimeout(() => startCountdown(sid, privateMatchId, match.isPlayer1 ?? true), 2000);\n        return;',
+    '        recoverActiveMatch(sid, match);\n        return;'
+  );
+
+  s = s.replace(
+    '  }, [stakeAmount, navigate, startCountdown, privateMatchId]);',
+    '  }, [stakeAmount, navigate, startCountdown, privateMatchId, recoverActiveMatch, recoverySearch]);'
   );
 
   if (!s.includes('Reaction Tap active-search lease heartbeat')) {
@@ -89,13 +157,10 @@ const write = (p, s) => fs.writeFileSync(p, s);
   // Reaction Tap active-search lease heartbeat. A lost page/network stops renewing the backend queue.
   useEffect(() => {
     if (!queueId || gameState !== "searching") return;
-    let stopped = false;
-    const beat = () => {
-      void gameMatchmakingService.heartbeatQueue(queueId).catch(() => {});
-    };
+    const beat = () => { void gameMatchmakingService.heartbeatQueue(queueId).catch(() => {}); };
     beat();
     const heartbeat = setInterval(beat, 5000);
-    return () => { stopped = true; clearInterval(heartbeat); };
+    return () => clearInterval(heartbeat);
   }, [queueId, gameState]);
 `;
     if (!s.includes(marker)) throw new Error("Reaction Tap heartbeat insertion marker not found");
