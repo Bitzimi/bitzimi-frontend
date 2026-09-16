@@ -6,6 +6,8 @@
  *
  * Endpoints consumed:
  *   POST   /api/v1/games/queue               — join 1v1 matchmaking
+ *   GET    /api/v1/games/queue/active        — read-only active search/match recovery
+ *   POST   /api/v1/games/queue/:id/heartbeat — refresh active-search lease
  *   GET    /api/v1/games/queue/:id           — poll queue status
  *   DELETE /api/v1/games/queue/:id           — leave queue
  *   GET    /api/v1/games/matches/:id         — poll match result
@@ -47,6 +49,12 @@ export interface QueueResult {
   matchId?: string;
 }
 
+export interface ActiveMatchmaking {
+  status: "none" | "waiting" | "matched";
+  queueId: string | null;
+  matchId: string | null;
+}
+
 export interface PrivateRoom {
   id:                string;
   code:              string;
@@ -79,7 +87,7 @@ export interface MatchResult {
   youWon:      boolean;
   payout:      number;
   createdAt:   string;
-  settledAt:   string | null;
+  settledAt:  string | null;
   signalSentAt:string | null;
   serverNow: number;
   lifecycleStartedAt: number;
@@ -97,6 +105,12 @@ export interface GameConfig {
 export const gameMatchmakingService = {
   async joinQueue(gameType: MatchGameType, stake: number): Promise<QueueResult> {
     return apiFetch("/api/v1/games/queue", { method: "POST", body: JSON.stringify({ gameType, stake }) });
+  },
+  async getActiveMatchmaking(gameType: MatchGameType, stake: number): Promise<ActiveMatchmaking> {
+    return apiFetch(`/api/v1/games/queue/active?gameType=${encodeURIComponent(gameType)}&stake=${encodeURIComponent(stake)}`);
+  },
+  async heartbeatQueue(queueId: string): Promise<{ status: "waiting" | "matched" | "cancelled"; matchId: string | null; expiresAt?: string }> {
+    return apiFetch(`/api/v1/games/queue/${encodeURIComponent(queueId)}/heartbeat`, { method: "POST", body: "{}" });
   },
   async pollQueue(queueId: string): Promise<QueueResult> {
     return apiFetch(`/api/v1/games/queue/${queueId}`);
