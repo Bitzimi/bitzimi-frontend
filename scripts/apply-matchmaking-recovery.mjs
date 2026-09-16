@@ -3,8 +3,6 @@ import fs from "node:fs";
 const read = p => fs.readFileSync(p, "utf8");
 const write = (p, s) => fs.writeFileSync(p, s);
 
-// Recovery coordinator lives inside the existing router tree and renders nothing.
-// It only redirects an already-active backend queue/match back into the existing game page.
 {
   const p = "src/app/routes.tsx";
   let s = read(p);
@@ -21,25 +19,19 @@ const write = (p, s) => fs.writeFileSync(p, s);
   write(p, s);
 }
 
-// Coin Flip: preserve its current UI/game flow, adding only backend recovery and a lease heartbeat.
 {
   const p = "src/app/pages/PvPCoinFlipGame.tsx";
   let s = read(p);
-
   if (!s.includes('const recoverySearch = searchParams.get("recovery") === "search";')) {
     s = s.replace(
       '  const privateMatchId = searchParams.get("matchId");\n',
       '  const privateMatchId = searchParams.get("matchId");\n  const recoverySearch = searchParams.get("recovery") === "search";\n'
     );
   }
-
-  // An existing match has already had its stake deducted by the backend. Recovery must
-  // never require the user to have another stake available just to reconnect to that match.
   s = s.replace(
     '    if (balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/pvp-coinflip");\n      return;\n    }',
     '    if (!privateMatchId && balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/pvp-coinflip");\n      return;\n    }'
   );
-
   const marker = '\n  const handleSearchNewOpponent = () => {';
   if (!s.includes('Matchmaking recovery — resume the existing backend search')) {
     const recoveryBlock = `
@@ -68,30 +60,22 @@ const write = (p, s) => fs.writeFileSync(p, s);
     if (!s.includes(marker)) throw new Error("Coin Flip recovery insertion marker not found");
     s = s.replace(marker, `${recoveryBlock}${marker}`);
   }
-
   write(p, s);
 }
 
-// Reaction Tap: its existing build-time UI/flow transformation remains authoritative;
-// this patch adds only recovery-search handling, active-match phase recovery, and the backend lease heartbeat.
 {
   const p = "app/pages/ReactionTapGameRoom.tsx";
   let s = read(p);
-
   if (!s.includes('const recoverySearch = searchParams.get("recovery") === "search";')) {
     s = s.replace(
       '  const roomCode = searchParams.get("roomCode");\n',
       '  const roomCode = searchParams.get("roomCode");\n  const recoverySearch = searchParams.get("recovery") === "search";\n'
     );
   }
-
-  // An existing match has already had its stake deducted by the backend; reconnecting must not
-  // fail a balance check intended only for a brand-new matchmaking attempt.
   s = s.replace(
     '    if (balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/reaction-tap");\n      return;\n    }',
     '    if (!privateMatchId && !recoverySearch && balances.game < stakeAmount) {\n      toast.error("Insufficient balance in Game Wallet");\n      navigate("/game/reaction-tap");\n      return;\n    }'
   );
-
   s = s.replace(
     '    if (privateMatchId) enterQueue(sid);',
     '    if (privateMatchId || recoverySearch) enterQueue(sid);'
@@ -140,12 +124,8 @@ const write = (p, s) => fs.writeFileSync(p, s);
     s = s.replace(marker, `${recoveryFunction}${marker}`);
   }
 
-  // Private-match/recovered-match entry uses the same backend state instead of restarting the round.
-  s = s.replace(
-    '        setMatchId(privateMatchId);\n        setOpponentName(match.opponent.username);\n        setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());\n        setGameState("matched");\n        setTimeout(() => startCountdown(sid, privateMatchId, match.isPlayer1 ?? true), 2000);\n        return;',
-    '        recoverActiveMatch(sid, match);\n        return;'
-  );
-
+  const privateBlockWithData = '        setMatchId(privateMatchId);\n        setMatchData(match);\n        setOpponentName(match.opponent.username);\n        setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());\n        setGameState("matched");\n        setTimeout(() => startCountdown(sid, privateMatchId, match.isPlayer1 ?? true), 2000);\n        return;';
+  s = s.replace(privateBlockWithData, '        recoverActiveMatch(sid, match);\n        return;');
   s = s.replace(
     '  }, [stakeAmount, navigate, startCountdown, privateMatchId]);',
     '  }, [stakeAmount, navigate, startCountdown, privateMatchId, recoverActiveMatch, recoverySearch]);'
@@ -166,6 +146,5 @@ const write = (p, s) => fs.writeFileSync(p, s);
     if (!s.includes(marker)) throw new Error("Reaction Tap heartbeat insertion marker not found");
     s = s.replace(marker, `${heartbeatBlock}${marker}`);
   }
-
   write(p, s);
 }
