@@ -179,6 +179,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
                   <div className="relative">
                     <div className="text-center flex flex-col items-center">
+                      <div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block mb-6">Balance: {formatCurrencyNoDecimals(balances.game)}</div>
                       <Button
                         variant="outline"
                         onClick={handleSearch}
@@ -198,6 +199,31 @@ const write = (p, s) => fs.writeFileSync(p, s);
   s = s.replace(
     '            {/* Searching */}\n',
     idleMarkup + '            {/* Searching */}\n'
+  );
+
+  // Keep the live Game Wallet balance inside the actual gameplay card, matching the
+  // Coin Flip placement between the two players. No header balance card is used.
+  s = s.replace(
+    '                    <div className="text-center bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border border-green-200 dark:border-green-800 rounded-xl py-3 px-4">',
+    '                    <div className="text-center mb-4"><div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">Balance: {formatCurrencyNoDecimals(balances.game)}</div></div>\n                    <div className="text-center bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border border-green-200 dark:border-green-800 rounded-xl py-3 px-4">'
+  );
+  s = s.replace(
+    '                  <div className="text-center py-8 sm:py-12">\n                    <p className="text-sm sm:text-base font-semibold text-gray-600 dark:text-gray-400 mb-6 uppercase tracking-widest">Get Ready</p>',
+    '                  <div className="text-center mb-4"><div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">Balance: {formatCurrencyNoDecimals(balances.game)}</div></div>\n                  <div className="text-center py-8 sm:py-12">\n                    <p className="text-sm sm:text-base font-semibold text-gray-600 dark:text-gray-400 mb-6 uppercase tracking-widest">Get Ready</p>'
+  );
+  s = s.replace(
+    '                  <div className="text-center py-8 sm:py-12">\n                    <p className="text-4xl sm:text-6xl font-black text-gray-900 dark:text-white mb-8">WAIT...</p>',
+    '                  <div className="text-center mb-4"><div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">Balance: {formatCurrencyNoDecimals(balances.game)}</div></div>\n                  <div className="text-center py-8 sm:py-12">\n                    <p className="text-4xl sm:text-6xl font-black text-gray-900 dark:text-white mb-8">WAIT...</p>'
+  );
+  s = s.replace(
+    '                  <div className="py-4 sm:py-6">\n                    <Button onClick={handleTap}',
+    '                  <div className="text-center mb-4"><div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block">Balance: {formatCurrencyNoDecimals(balances.game)}</div></div>\n                  <div className="py-4 sm:py-6">\n                    <Button onClick={handleTap}'
+  );
+
+  // Searching card gets the same compact in-game balance treatment as Coin Flip.
+  s = s.replace(
+    '                  <div className="relative">\n                    <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20',
+    '                  <div className="relative">\n                    <div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block mb-6">Balance: {formatCurrencyNoDecimals(balances.game)}</div>\n                    <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20'
   );
 
   write(p, s);
