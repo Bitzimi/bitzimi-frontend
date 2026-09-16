@@ -12,16 +12,15 @@ const write = (p, s) => fs.writeFileSync(p, s);
   write(p, s);
 }
 
-// Reaction Tap keeps its original UI/markup. Only its matchmaking entry state is
-// adjusted here so Quick Match opens the full room in an idle state, matching the
-// existing Coin Flip interaction pattern without redesigning the game room.
+// Reaction Tap keeps its original UI/markup and gameplay. Build-time changes only
+// align its room entry and surrounding chrome with the established Coin Flip pattern.
 {
   const p = "app/pages/ReactionTapGameRoom.tsx";
   let s = read(p);
 
   s = s.replace(
     'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp } from "lucide-react";',
-    'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp, Search } from "lucide-react";'
+    'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, Search, Info } from "lucide-react";'
   );
   s = s.replace(
     'import { PlayerAvatar } from "../components/PlayerAvatar";',
@@ -45,6 +44,13 @@ const write = (p, s) => fs.writeFileSync(p, s);
     );
   }
 
+  if (!s.includes('const [showRules,       setShowRules]')) {
+    s = s.replace(
+      'const [walletAnimation,  setWalletAnimation]  = useState(false);',
+      'const [walletAnimation,  setWalletAnimation]  = useState(false);\n  const [showRules,       setShowRules]       = useState(false);'
+    );
+  }
+
   const handleSearchBlock = `
   // ── Explicit matchmaking trigger ─────────────────────────────────────────────
   const handleSearch = useCallback(() => {
@@ -64,15 +70,11 @@ const write = (p, s) => fs.writeFileSync(p, s);
     '    const sid = sessionId.current;\n    // Private matches enter their pre-created room immediately. Quick Match waits\n    // for the user to press Search in the already-open game room.\n    if (privateMatchId) enterQueue(sid);\n    return () => stopAllTimers();'
   );
 
-  // Reaction Tap must use the backend-provided participant avatar, just like Coin Flip.
-  // Keep the username initial only as the existing backend fallback.
   s = s.replaceAll(
     'setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());',
     'setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());'
   );
 
-  // Retain the complete match response so the stats card can use backend-authoritative
-  // stake/pool/payout values instead of deriving them in the frontend.
   s = s.replaceAll(
     'setMatchId(privateMatchId);\n        setOpponentName(match.opponent.username);',
     'setMatchId(privateMatchId);\n        setMatchData(match);\n        setOpponentName(match.opponent.username);'
@@ -116,6 +118,59 @@ const write = (p, s) => fs.writeFileSync(p, s);
 
             {/* Searching */}`;
   s = s.replace(oldStatsPattern, newStatsBlock);
+
+  // Replace only the surrounding Reaction Tap header chrome. The game title/stake
+  // identity remains intact; unlike Coin Flip, Reaction Tap has no fairness action.
+  const oldHeaderPattern = /        \{\/\* Header \*\/\}[\s\S]*?        <\/div>\n\n        \{\/\* Main \*\/\}/;
+  const newHeaderBlock = `        {/* Header — clean Coin Flip-style chrome, without fairness verification */}
+        <div className="space-y-3 mb-6">
+          <div className="flex items-center">
+            <Button variant="ghost" size="sm" onClick={handleExit}
+              className="hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors px-3 -ml-3">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              <span className="text-sm font-medium">Back to stake room</span>
+            </Button>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-baseline gap-[6px]">
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Arena</h1>
+              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setShowRules(!showRules)}
+              className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white px-4 rounded-lg transition-all shrink-0">
+              <Info className="h-4 w-4 mr-2" />Rules
+            </Button>
+          </div>
+          {showRules && (
+            <Card className="border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+              <div className="p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">How to Play</h3>
+                <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 list-disc list-inside">
+                  <li>Wait for the match to be created and both players to be ready.</li>
+                  <li>Do not tap before the signal appears — an early tap is recorded as an early loss.</li>
+                  <li>When <strong>TAP NOW</strong> appears, tap as quickly as you can.</li>
+                  <li>The backend compares both submitted reaction times and determines the winner.</li>
+                  <li>The winner receives the backend-calculated payout after the platform fee.</li>
+                  <li>If the round is voided because both players tap early, the stakes are refunded.</li>
+                </ul>
+              </div>
+            </Card>
+          )}
+        </div>
+
+        {/* Main */}`;
+  s = s.replace(oldHeaderPattern, newHeaderBlock);
+
+  // Room Activity stays functional; only the decorative icon and second-line stake
+  // label are removed so the title and stake room share one clean line.
+  const oldActivityHeader = /              <div className="p-4 border-b border-gray-200 dark:border-gray-800">\n                <div className="flex items-center gap-2">\n                  <TrendingUp className="h-5 w-5 text-gray-600 dark:text-gray-400" \/>\n                  <h3 className="font-bold text-gray-900 dark:text-white">Room Activity<\/h3>\n                <\/div>\n                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">\{formatCurrencyNoDecimals\(stakeAmount\)\} Stake Room<\/p>\n              <\/div>/;
+  const newActivityHeader = `              <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-bold text-gray-900 dark:text-white">Room Activity</h3>
+                  <span className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatCurrencyNoDecimals(stakeAmount)} Stake Room</span>
+                </div>
+              </div>`;
+  s = s.replace(oldActivityHeader, newActivityHeader);
 
   const idleMarkup = `            {/* Idle — same Reaction Tap room, matchmaking starts only after Search */}
             {gameState === "idle" && (
