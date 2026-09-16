@@ -2,7 +2,6 @@ import { RouterProvider } from "react-router";
 import { Component, type ReactNode } from "react";
 import { router } from "./routes";
 import { Toaster } from "./components/ui/sonner";
-import { MatchmakingRecovery } from "./components/MatchmakingRecovery";
 import { SettingsProvider } from "./contexts/SettingsContext";
 import { PlatformProvider } from "./contexts/PlatformContext";
 import { WalletProvider } from "./contexts/WalletContext";
@@ -54,7 +53,6 @@ export default function App() {
                 <TransactionProvider>
                   <AppLifecycle />
                   <RouterErrorBoundary>
-                    <MatchmakingRecovery />
                     <RouterProvider router={router} />
                   </RouterErrorBoundary>
                   <Toaster />
