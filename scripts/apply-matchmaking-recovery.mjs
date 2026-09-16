@@ -44,17 +44,10 @@ const write = (p, s) => fs.writeFileSync(p, s);
   // Active-search lease heartbeat. If the browser/network disappears, the backend lease expires.
   useEffect(() => {
     if (!queueId || gameState !== "searching") return;
-    let stopped = false;
-    const beat = () => {
-      void gameMatchmakingService.heartbeatQueue(queueId).then(result => {
-        if (!stopped && result.status === "matched" && result.matchId && pollRef.current) {
-          clearInterval(pollRef.current);
-        }
-      }).catch(() => {});
-    };
+    const beat = () => { void gameMatchmakingService.heartbeatQueue(queueId).catch(() => {}); };
     beat();
     const heartbeat = setInterval(beat, 5000);
-    return () => { stopped = true; clearInterval(heartbeat); };
+    return () => clearInterval(heartbeat);
   }, [queueId, gameState]);
 `;
     if (!s.includes(marker)) throw new Error("Coin Flip recovery insertion marker not found");
