@@ -19,6 +19,34 @@ const write = (p, s) => fs.writeFileSync(p, s);
   write(p, s);
 }
 
+// Reaction Tap production currently imports the canonical app/ service during the existing build transform.
+// Keep that service synchronized with the recovery API without creating a second runtime service.
+{
+  const p = "app/services/gameMatchmakingService.ts";
+  let s = read(p);
+  if (!s.includes("export interface ActiveMatchmaking")) {
+    s = s.replace(
+      'export interface QueueResult {\n  status:   "waiting" | "matched" | "cancelled";\n  queueId?: string;\n  matchId?: string;\n}\n',
+      'export interface QueueResult {\n  status:   "waiting" | "matched" | "cancelled";\n  queueId?: string;\n  matchId?: string;\n}\n\nexport interface ActiveMatchmaking {\n  status: "none" | "waiting" | "matched";\n  queueId: string | null;\n  matchId: string | null;\n}\n'
+    );
+  }
+  if (!s.includes("async getActiveMatchmaking")) {
+    const marker = '  /** Poll until matched. Returns {status: "matched", matchId} or {status: "cancelled"}. */\n';
+    const methods = `  async getActiveMatchmaking(gameType: MatchGameType, stake: number): Promise<ActiveMatchmaking> {
+    return apiFetch(\`/api/v1/games/queue/active?gameType=\${encodeURIComponent(gameType)}&stake=\${encodeURIComponent(stake)}\`);
+  },
+
+  async heartbeatQueue(queueId: string): Promise<{ status: "waiting" | "matched" | "cancelled"; matchId: string | null; expiresAt?: string }> {
+    return apiFetch(\`/api/v1/games/queue/\${encodeURIComponent(queueId)}/heartbeat\`, { method: "POST", body: "{}" });
+  },
+
+`;
+    if (!s.includes(marker)) throw new Error("app service recovery insertion marker not found");
+    s = s.replace(marker, `${methods}${marker}`);
+  }
+  write(p, s);
+}
+
 {
   const p = "src/app/pages/PvPCoinFlipGame.tsx";
   let s = read(p);
