@@ -147,6 +147,35 @@ const write = (p, s) => fs.writeFileSync(p, s);
 
   const privateBlockWithData = '        setMatchId(privateMatchId);\n        setMatchData(match);\n        setOpponentName(match.opponent.username);\n        setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());\n        setGameState("matched");\n        setTimeout(() => startCountdown(sid, privateMatchId, match.isPlayer1 ?? true), 2000);\n        return;';
   s = s.replace(privateBlockWithData, '        recoverActiveMatch(sid, match);\n        return;');
+
+  // IMPORTANT: recoverySearch must read the existing backend state. Calling joinQueue()
+  // here would create a fresh queue after reload and defeats the recovery contract.
+  const queueCall = '      const res = await gameMatchmakingService.joinQueue("reaction_tap", stakeAmount);';
+  if (s.includes(queueCall) && !s.includes('const res = recoverySearch')) {
+    s = s.replace(
+      queueCall,
+      '      const res = recoverySearch\n        ? await gameMatchmakingService.getActiveMatchmaking("reaction_tap", stakeAmount)\n        : await gameMatchmakingService.joinQueue("reaction_tap", stakeAmount);'
+    );
+  }
+
+  // A recovered match is already funded/created by the backend; reconnect to it instead
+  // of starting the normal new-match countdown path.
+  const matchedBlock = '        setMatchId(res.matchId);\n        setOpponentName(match.opponent.username);\n        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());\n        setGameState("matched");\n        setTimeout(() => startCountdown(sid, res.matchId!, match.isPlayer1 ?? true), 2000);\n        return;';
+  s = s.replace(
+    matchedBlock,
+    '        if (recoverySearch) {\n          recoverActiveMatch(sid, match);\n        } else {\n          setMatchId(res.matchId);\n          setOpponentName(match.opponent.username);\n          setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());\n          setGameState("matched");\n          setTimeout(() => startCountdown(sid, res.matchId!, match.isPlayer1 ?? true), 2000);\n        }\n        return;'
+  );
+
+  // Recovery can legitimately find no active queue/match (for example after the backend
+  // lease expired). Never create a replacement queue from a recovery URL.
+  const waitingBlock = '      if (res.queueId) {';
+  if (s.includes(waitingBlock) && !s.includes('if (recoverySearch && res.status === "none")')) {
+    s = s.replace(
+      waitingBlock,
+      '      if (recoverySearch && res.status === "none") {\n        navigate("/game/reaction-tap");\n        return;\n      }\n\n      if (res.queueId) {'
+    );
+  }
+
   s = s.replace(
     '  }, [stakeAmount, navigate, startCountdown, privateMatchId]);',
     '  }, [stakeAmount, navigate, startCountdown, privateMatchId, recoverActiveMatch, recoverySearch]);'
