@@ -5,9 +5,12 @@ import { gameMatchmakingService, type MatchGameType } from "../services/gameMatc
 const RECOVERY_ROUTES: Record<string, MatchGameType> = {
   "/game/pvp-coinflip/play": "pvp_coinflip",
   "/game/reaction-tap/play": "reaction_tap",
+  "/dice-duel/clash/game": "dice_clash",
 };
 
-const RECOVERY_RETRIES = [0, 700, 1800];
+// Recovery runs quietly for a short window because auth/context hydration and a
+// backend request can legitimately finish a moment after the route mounts.
+const RECOVERY_RETRIES_MS = [0, 500, 1200, 2500, 5000];
 
 export function MatchmakingRecovery() {
   const location = useLocation();
@@ -48,10 +51,13 @@ export function MatchmakingRecovery() {
           params.set("recovery", "search");
           params.delete("matchId");
           navigate(`${pathname}?${params.toString()}`, { replace: true });
+          return;
         }
       } catch {
-        if (cancelled || attempt >= RECOVERY_RETRIES.length - 1) return;
-        retryTimer = setTimeout(() => void check(attempt + 1), RECOVERY_RETRIES[attempt + 1]);
+        // Recovery must never kick the player out of the game route because of a
+        // transient auth/network/backend read failure. Retry silently instead.
+        if (cancelled || attempt >= RECOVERY_RETRIES_MS.length - 1) return;
+        retryTimer = setTimeout(() => void check(attempt + 1), RECOVERY_RETRIES_MS[attempt + 1]);
       }
     };
 
