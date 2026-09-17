@@ -20,11 +20,16 @@ const write = (p, s) => fs.writeFileSync(p, s);
     '      } catch {\n        if (!cancelled) {\n          setGameState("idle");\n          toast.error("Unable to reconnect to this match. Please try Search again.");\n        }\n      }'
   );
 
-  // Automatic queue/result failures stay in the current game room. The visible
-  // Back to Stake Room and Search New Opponent actions remain untouched.
+  // Automatic queue/result failures stay in the current game room.
   s = s.replaceAll(
     'navigate("/game/pvp-coinflip");',
     'setGameState("idle");\n      toast.error("Matchmaking session ended. Press Search to try again.");'
+  );
+
+  // Restore the legitimate Back to Stake Room action after the automatic-route pass.
+  s = s.replace(
+    '  const handleExit = () => {\n    if (roomCode) navigate(`/game/pvp-coinflip/private?roomCode=${roomCode}&stake=${stakeAmount}`);\n    else setGameState("idle");\n      toast.error("Matchmaking session ended. Press Search to try again.");\n  };',
+    '  const handleExit = () => {\n    if (roomCode) navigate(`/game/pvp-coinflip/private?roomCode=${roomCode}&stake=${stakeAmount}`);\n    else navigate("/game/pvp-coinflip");\n  };'
   );
 
   write(p, s);
@@ -35,9 +40,6 @@ const write = (p, s) => fs.writeFileSync(p, s);
   let s = read(p);
 
   s = s.replaceAll("Reaction Arena", "Tap Arena");
-
-  // Backend is authoritative for stake availability; never route because a
-  // frontend wallet snapshot is stale or still hydrating.
   s = s.replaceAll("if (balances.game < stakeAmount)", "if (false && balances.game < stakeAmount)");
   s = s.replaceAll("if (!privateMatchId && !recoverySearch && balances.game < stakeAmount)", "if (false && balances.game < stakeAmount)");
 
@@ -58,7 +60,12 @@ const write = (p, s) => fs.writeFileSync(p, s);
     'h("idle"); ce(null); H.error("Matchmaking session ended. Press Search to try again.")'
   );
 
-  // Preserve the requested centered Balance -> Search stack.
+  // Restore the legitimate Back to Stake Room action after the automatic-route pass.
+  s = s.replace(
+    '  const handleExit = useCallback(() => {\n    stopAllTimers();\n    if (roomCode) navigate(`/game/reaction-tap/private?roomCode=${roomCode}&stake=${stakeAmount}`);\n    else h("idle"); ce(null); H.error("Matchmaking session ended. Press Search to try again.");',
+    '  const handleExit = useCallback(() => {\n    stopAllTimers();\n    if (roomCode) navigate(`/game/reaction-tap/private?roomCode=${roomCode}&stake=${stakeAmount}`);\n    else navigate("/game/reaction-tap");'
+  );
+
   s = s.replace(
     'className="text-center flex flex-col items-center"',
     'className="text-center flex flex-col items-center justify-center"'
