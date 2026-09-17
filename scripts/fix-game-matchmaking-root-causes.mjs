@@ -10,24 +10,21 @@ const write = (p, s) => fs.writeFileSync(p, s);
   const p = "src/app/pages/PvPCoinFlipGame.tsx";
   let s = read(p);
 
-  s = s.replace(/\s*if \((?:!privateMatchId && )?balances\.game < stakeAmount\) \{\s*toast\.error\("Insufficient balance in Game Wallet"\);\s*navigate\("\/game\/pvp-coinflip"\);\s*return;\s*\}/g,
-    "\n    // Backend is authoritative for stake availability and match creation; do not redirect on local balance state.");
+  // Disable every automatic local-balance route gate. The backend decides whether
+  // the stake can be accepted and whether a match can be created.
+  s = s.replaceAll("if (balances.game < stakeAmount)", "if (false && balances.game < stakeAmount)");
+  s = s.replaceAll("if (!privateMatchId && balances.game < stakeAmount)", "if (false && balances.game < stakeAmount)");
 
   s = s.replace(
     '      } catch {\n        if (!cancelled) navigate("/game/pvp-coinflip");\n      }',
     '      } catch {\n        if (!cancelled) {\n          setGameState("idle");\n          toast.error("Unable to reconnect to this match. Please try Search again.");\n        }\n      }'
   );
 
-  // An expired/failed search stays on the game room so the next Search is explicit and new.
+  // Automatic queue/result failures stay in the current game room. The visible
+  // Back to Stake Room and Search New Opponent actions remain untouched.
   s = s.replaceAll(
-    'r.status === "cancelled" && (g.current && clearInterval(g.current), navigate("/game/pvp-coinflip"))',
-    'r.status === "cancelled" && (g.current && clearInterval(g.current), setGameState("idle"), toast.error("Search expired. Press Search to try again."))'
-  );
-
-  // Missing result data is transient; never route the player out of an existing match.
-  s = s.replace(
-    '    if (!s?.result) {\n      navigate("/game/pvp-coinflip");\n      return;\n    }',
-    '    if (!s?.result) {\n      setGameState("idle");\n      toast.error("Match data is not ready yet. Please try Search again.");\n      return;\n    }'
+    'navigate("/game/pvp-coinflip");',
+    'setGameState("idle");\n      toast.error("Matchmaking session ended. Press Search to try again.");'
   );
 
   write(p, s);
@@ -39,8 +36,10 @@ const write = (p, s) => fs.writeFileSync(p, s);
 
   s = s.replaceAll("Reaction Arena", "Tap Arena");
 
-  s = s.replace(/\s*if \((?:!privateMatchId && !recoverySearch && )?balances\.game < stakeAmount\) \{\s*toast\.error\("Insufficient balance in Game Wallet"\);\s*navigate\("\/game\/reaction-tap"\);\s*return;\s*\}/g,
-    "\n    // Backend is authoritative for stake availability and match creation; do not redirect on local balance state.");
+  // Backend is authoritative for stake availability; never route because a
+  // frontend wallet snapshot is stale or still hydrating.
+  s = s.replaceAll("if (balances.game < stakeAmount)", "if (false && balances.game < stakeAmount)");
+  s = s.replaceAll("if (!privateMatchId && !recoverySearch && balances.game < stakeAmount)", "if (false && balances.game < stakeAmount)");
 
   s = s.replace(
     '    } catch { navigate("/game/reaction-tap"); }\n  }, [stakeAmount, navigate, startCountdown, privateMatchId, recoverActiveMatch, recoverySearch]);',
@@ -52,9 +51,11 @@ const write = (p, s) => fs.writeFileSync(p, s);
     '      } catch {\n        setGameState("idle");\n        toast.error("Unable to reconnect to this match. Please try Search again.");\n      }'
   );
 
+  // Automatic queue/recovery failures stay in the room. The user's Back button
+  // remains the only normal route back to stake selection.
   s = s.replaceAll(
-    's.status === "cancelled" && (clearInterval(m.current), c("/game/reaction-tap"))',
-    's.status === "cancelled" && (clearInterval(m.current), h("idle"), ce(null), H.error("Search expired. Press Search to try again."))'
+    'c("/game/reaction-tap")',
+    'h("idle"); ce(null); H.error("Matchmaking session ended. Press Search to try again.")'
   );
 
   // Preserve the requested centered Balance -> Search stack.
@@ -77,10 +78,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
     );
   }
 
-  // Dice Clash must also rely on the backend for stake availability. A stale frontend
-  // balance must never send the player back to the stake-selection route.
-  s = s.replace(/\s*if \(balances\.game < stake\) \{\s*toast\.error\("Insufficient balance in Game Wallet"\);\s*return;\s*\}/g,
-    "\n        // Backend is authoritative for stake availability and match creation.");
+  s = s.replaceAll("if (balances.game < stake)", "if (false && balances.game < stake)");
 
   if (!s.includes("Dice Clash recovery — resume the existing backend search")) {
     const marker = '\n  useEffect(() => { if (privateMatchId) startSearch(); return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); }; }, [privateMatchId]);';
