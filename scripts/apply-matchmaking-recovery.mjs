@@ -20,7 +20,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
 }
 
 {
-  const p = "app/services/gameMatchmakingService.ts";
+  const p = "src/app/services/gameMatchmakingService.ts";
   let s = read(p);
   if (!s.includes("export interface ActiveMatchmaking")) {
     s = s.replace(
@@ -83,7 +83,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
 }
 
 {
-  const p = "app/pages/ReactionTapGameRoom.tsx";
+  const p = "src/app/pages/ReactionTapGameRoom.tsx";
   let s = read(p);
   if (!s.includes('const recoverySearch = searchParams.get("recovery") === "search";')) {
     s = s.replace(
