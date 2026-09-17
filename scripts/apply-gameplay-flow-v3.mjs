@@ -15,16 +15,12 @@ const write = (p, s) => fs.writeFileSync(p, s);
 // Reaction Tap keeps its original UI/markup and gameplay. Build-time changes only
 // align its room entry and surrounding chrome with the established Coin Flip pattern.
 {
-  const p = "app/pages/ReactionTapGameRoom.tsx";
+  const p = "src/app/pages/ReactionTapGameRoom.tsx";
   let s = read(p);
 
   s = s.replace(
     'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp } from "lucide-react";',
     'import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, Search, Info } from "lucide-react";'
-  );
-  s = s.replace(
-    'import { PlayerAvatar } from "../components/PlayerAvatar";',
-    'import { PlayerAvatar } from "../../src/app/components/PlayerAvatar";'
   );
 
   s = s.replace(
