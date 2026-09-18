@@ -97,7 +97,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
   );
   s = s.replace(
     '    if (privateMatchId) enterQueue(sid);',
-    '    if (privateMatchId || recoverySearch) enterQueue(sid);'
+    '    if (privateMatchId || recoverySearch) { setGameState("searching"); enterQueue(sid); }'
   );
 
   if (!s.includes('const recoverActiveMatch = useCallback')) {
