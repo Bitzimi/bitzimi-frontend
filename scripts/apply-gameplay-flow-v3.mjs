@@ -218,7 +218,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
 
   // Searching card gets the same compact in-game balance treatment as Coin Flip.
   s = s.replace(
-    '                  <div className="relative">\n                    <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20',
+    '                  <div className="relative flex flex-col items-center">\n                    <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20',
     '                  <div className="relative">\n                    <div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block mb-6">Balance: {formatCurrencyNoDecimals(balances.game)}</div>\n                    <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20'
   );
 
