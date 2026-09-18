@@ -97,7 +97,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
   );
   s = s.replace(
     '    if (privateMatchId) enterQueue(sid);',
-    '    if (privateMatchId || recoverySearch) { setGameState("searching"); enterQueue(sid); }'
+    '    if (privateMatchId || recoverySearch) enterQueue(sid);'
   );
 
   if (!s.includes('const recoverActiveMatch = useCallback')) {
@@ -176,7 +176,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
     if (s.includes(waitingBlock)) {
       s = s.replace(
         waitingBlock,
-        '      if (recoverySearch && res.status === "none") {\n        setGameState("idle");\n        setQueueId(null);\n        return;\n      }\n\n      if (res.queueId) {'
+        '      if (recoverySearch && res.status === "none") {\n        navigate("/game/reaction-tap");\n        return;\n      }\n\n      if (res.queueId) {'
       );
     }
   }
