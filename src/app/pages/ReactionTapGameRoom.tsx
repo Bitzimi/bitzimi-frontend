@@ -17,7 +17,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ResponsiveLayout } from "../components/ResponsiveLayout";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, Search, Info } from "lucide-react";
+import { ArrowLeft, Zap, Trophy, AlertCircle, Clock, TrendingUp } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useSettings } from "../contexts/SettingsContext";
 import { useWallet } from "../contexts/WalletContext";
@@ -33,17 +33,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from "../components/ui/dialog";
 import { ReactionTapGameHistory, addReactionTapGameToHistory } from "../components/ReactionTapGameHistory";
 import { gameMatchmakingService, type MatchResult } from "../services/gameMatchmakingService";
 
 // ── Game state machine ─────────────────────────────────────────────────────────
 type GameState =
-  | "idle"            // room open, waiting for Search
   | "searching"       // in matchmaking queue
   | "matched"         // opponent found, about to signal ready
-  | "countdown"        // shared server-timed countdown
   | "signaling"       // called signalReady(), waiting for opponent to be ready too
   | "waiting_signal"  // both ready — waiting for signalSentAt to pass
   | "signal_shown"    // TAP NOW visible
@@ -57,7 +54,6 @@ export default function ReactionTapGameRoom() {
   const stakeAmount  = parseInt(searchParams.get("stake") || "1");
   const privateMatchId = searchParams.get("matchId");
   const roomCode = searchParams.get("roomCode");
-  const recoverySearch = searchParams.get("recovery") === "search";
 
   const { formatCurrencyNoDecimals } = useSettings();
   // Wallet — backend controls all balance changes.
@@ -69,13 +65,11 @@ export default function ReactionTapGameRoom() {
   const myUsername   = identity.username;
 
   // ── Core game state ──────────────────────────────────────────────────────────
-  const [gameState,        setGameState]        = useState<GameState>("idle");
+  const [gameState,        setGameState]        = useState<GameState>("searching");
   const [opponentName,     setOpponentName]     = useState("");
   const [opponentAvatar,   setOpponentAvatar]   = useState("P");
   const [queueId,          setQueueId]          = useState<string | null>(null);
   const [matchId,          setMatchId]          = useState<string | null>(null);
-  const [matchData,         setMatchData]         = useState<MatchResult | null>(null);
-  const [showRules,         setShowRules]         = useState(false);
 
   // ── Countdown UI state (5…4…3…2…1 before "WAIT...") ───────────────────────
   const [countdownValue,   setCountdownValue]   = useState(5);
@@ -123,6 +117,7 @@ export default function ReactionTapGameRoom() {
   // ── Phase: show signal ────────────────────────────────────────────────────────
   const showSignal = useCallback((sid: string) => {
     if (sessionId.current !== sid) return;
+    signalSentAtRef.current = Date.now();
     setGameState("signal_shown");
 
     liveTimerRef.current = setInterval(() => {
@@ -146,37 +141,24 @@ export default function ReactionTapGameRoom() {
   }, [showSignal]);
 
   // ── Phase: 5-second countdown after match found ───────────────────────────────
-  // Both players use the same backend match creation timestamp and server clock.
-  // The local browser only renders that shared timeline; it never starts its own
-  // independent 5-second countdown from the moment the response arrives.
-  const startCountdown = useCallback((sid: string, match: MatchResult) => {
+  const startCountdown = useCallback((sid: string, mid: string, p1: boolean) => {
     if (sessionId.current !== sid) return;
-    const mid = match.matchId;
-    const serverOffset = (match.serverNow ?? Date.now()) - Date.now();
-    const countdownStartServerMs = match.lifecycleStartedAt + 2000;
-
-    matchIdRef.current = mid;
-    isPlayer1Ref.current = Boolean(match.isPlayer1);
-    setMatchId(mid);
-    setMatchData(match);
+    matchIdRef.current  = mid;
+    isPlayer1Ref.current = p1;
     setGameState("countdown");
+    setCountdownValue(5);
 
-    const tick = () => {
-      if (sessionId.current !== sid) return;
-      const nowServerMs = Date.now() + serverOffset;
-      const remaining = countdownStartServerMs - nowServerMs;
-      if (remaining <= 0) {
-        if (countdownRef.current) clearInterval(countdownRef.current);
-        countdownRef.current = null;
-        void startSignalingPhase(sid, mid);
-        return;
+    let count = 5;
+    countdownRef.current = setInterval(() => {
+      if (sessionId.current !== sid) { clearInterval(countdownRef.current!); return; }
+      count--;
+      setCountdownValue(count);
+      if (count === 0) {
+        clearInterval(countdownRef.current!);
+        startSignalingPhase(sid, mid);
       }
-      setCountdownValue(Math.min(5, Math.max(1, Math.ceil(remaining / 1000))));
-    };
-
-    tick();
-    countdownRef.current = setInterval(tick, 100);
-  }, []);
+    }, 1000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Phase: call signalReady(), poll until signalSentAt is set ─────────────────
   const startSignalingPhase = useCallback(async (sid: string, mid: string) => {
@@ -239,13 +221,12 @@ export default function ReactionTapGameRoom() {
     if (sessionId.current !== sid || gameEndedRef.current) return;
     gameEndedRef.current = true;
     stopAllTimers();
-    setMatchData(match);
 
     const voided     = match.status === "cancelled";
     const won        = !voided && match.youWon;
-    const totalPool = match.totalPool;
-    const fee = match.platformFee;
-    const payout = match.payout;
+    const totalPool  = stakeAmount * 2;
+    const fee        = Math.floor(totalPool * 0.10);
+    const payout     = totalPool - fee;
 
     setIsWinner(won);
     setIsVoided(voided);
@@ -316,149 +297,71 @@ export default function ReactionTapGameRoom() {
   }, [stakeAmount, opponentName, opponentAvatar, myUsername, refreshWalletsFromBackend, addGameResult, addNotification, formatCurrencyNoDecimals, stopAllTimers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Enter matchmaking queue ────────────────────────────────────────────────────
-  const recoverActiveMatch = useCallback(async (sid: string, match: MatchResult) => {
-    if (sessionId.current !== sid || match.status !== "active") {
-      if (match.status === "settled" || match.status === "cancelled") handleMatchResult(sid, match);
-      return;
-    }
-
-    matchIdRef.current = match.matchId;
-    isPlayer1Ref.current = Boolean(match.isPlayer1);
-    setMatchId(match.matchId);
-    setMatchData(match);
-    setOpponentName(match.opponent.username);
-    setOpponentAvatar(match.opponent.avatar || match.opponent.username.charAt(0).toUpperCase());
-
-    // If the authoritative signal already exists, resume exactly from that time.
-    if (match.signalSentAt) {
-      startWaitingPhase(sid, new Date(match.signalSentAt).getTime());
-      return;
-    }
-
-    // Otherwise resume the shared match-start countdown from the backend timestamp.
-    const serverOffset = (match.serverNow ?? Date.now()) - Date.now();
-    const countdownStartServerMs = match.lifecycleStartedAt + 2000;
-    const nowServerMs = Date.now() + serverOffset;
-    if (nowServerMs < countdownStartServerMs) {
-      startCountdown(sid, match);
-    } else {
-      // The countdown has already elapsed while this page was away. Tell the
-      // backend this player is ready; the backend decides when the shared signal occurs.
-      void startSignalingPhase(sid, match.matchId);
-    }
-  }, [handleMatchResult, startWaitingPhase, startCountdown, startSignalingPhase]);
-
-  const pollExistingQueue = useCallback((sid: string, qid: string) => {
-    setQueueId(qid);
-    setGameState("searching");
-    if (pollRef.current) clearInterval(pollRef.current);
-    const poll = async () => {
-      if (sessionId.current !== sid) return;
-      try {
-        const status = await gameMatchmakingService.pollQueue(qid);
-        if (sessionId.current !== sid) return;
-        if (status.status === "matched" && status.matchId) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          const match = await gameMatchmakingService.getMatch(status.matchId);
-          if (sessionId.current !== sid) return;
-          await recoverActiveMatch(sid, match);
-        } else if (status.status === "cancelled") {
-          if (pollRef.current) clearInterval(pollRef.current);
-          setQueueId(null);
-          setGameState("idle");
-        }
-      } catch {
-        // Keep the UI in the searching state. A transient network error must not
-        // turn an active backend queue into a false local cancellation.
-      }
-    };
-    void poll();
-    pollRef.current = setInterval(() => void poll(), 500);
-  }, [recoverActiveMatch]);
-
-  const enterQueue = useCallback(async (sid: string, forceNew = false) => {
+  const enterQueue = useCallback(async (sid: string) => {
     try {
+      // Private match: skip queue, load pre-created match directly
       if (privateMatchId) {
         const match = await gameMatchmakingService.getMatch(privateMatchId);
         if (sessionId.current !== sid) return;
-        await recoverActiveMatch(sid, match);
+        setMatchId(privateMatchId);
+        setOpponentName(match.opponent.username);
+        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+        setGameState("matched");
+        setTimeout(() => startCountdown(sid, privateMatchId, match.isPlayer1 ?? true), 2000);
         return;
       }
 
-      setGameState("searching");
       const res = await gameMatchmakingService.joinQueue("reaction_tap", stakeAmount);
       if (sessionId.current !== sid) return;
 
       if (res.status === "matched" && res.matchId) {
         const match = await gameMatchmakingService.getMatch(res.matchId);
         if (sessionId.current !== sid) return;
-        await recoverActiveMatch(sid, match);
+        setMatchId(res.matchId);
+        setOpponentName(match.opponent.username);
+        setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+        setGameState("matched");
+        setTimeout(() => startCountdown(sid, res.matchId!, match.isPlayer1 ?? true), 2000);
         return;
       }
-      if (res.queueId) pollExistingQueue(sid, res.queueId);
-    } catch {
-      if (sessionId.current !== sid) return;
-      setQueueId(null);
-      setGameState("idle");
-      toast.error("Unable to start matchmaking. Please try Search again.");
+
+      if (res.queueId) {
+        setQueueId(res.queueId);
+        pollRef.current = setInterval(async () => {
+          if (sessionId.current !== sid) { clearInterval(pollRef.current!); return; }
+          try {
+            const status = await gameMatchmakingService.pollQueue(res.queueId!);
+            if (sessionId.current !== sid) return;
+            if (status.status === "matched" && status.matchId) {
+              clearInterval(pollRef.current!);
+              const match = await gameMatchmakingService.getMatch(status.matchId);
+              if (sessionId.current !== sid) return;
+              setMatchId(status.matchId);
+              setOpponentName(match.opponent.username);
+              setOpponentAvatar(match.opponent.username.charAt(0).toUpperCase());
+              setGameState("matched");
+              setTimeout(() => startCountdown(sid, status.matchId!, match.isPlayer1 ?? true), 2000);
+            } else if (status.status === "cancelled") {
+              clearInterval(pollRef.current!);
+              navigate("/game/reaction-tap");
+            }
+          } catch { /* keep polling */ }
+        }, 2000);
+      }    } catch { navigate("/game/reaction-tap"); }
+  }, [stakeAmount, navigate, startCountdown, privateMatchId]);
+
+  // ── Mount: balance check + enter queue ────────────────────────────────────────
+  useEffect(() => {
+    if (balances.game < stakeAmount) {
+      toast.error("Insufficient balance in Game Wallet");
+      navigate("/game/reaction-tap");
+      return;
     }
-  }, [stakeAmount, recoverActiveMatch, pollExistingQueue, privateMatchId]);
-
-  const handleSearch = useCallback(() => {
-    if (gameState !== "idle") return;
-    void enterQueue(sessionId.current, true);
-  }, [gameState, enterQueue]);
-
-  // ── Mount: recover the real backend state before deciding what the UI should show ──
-  useEffect(() => {
+    // Backend deducts stakes when match is created — no local decrementBalance
     const sid = sessionId.current;
-    let cancelled = false;
-    const restore = async () => {
-      if (privateMatchId) {
-        await enterQueue(sid);
-        return;
-      }
-      try {
-        const active = await gameMatchmakingService.getActiveMatchmaking("reaction_tap", stakeAmount);
-        if (cancelled || sessionId.current !== sid) return;
-        if (active.status === "matched" && active.matchId) {
-          const match = await gameMatchmakingService.getMatch(active.matchId);
-          if (!cancelled) await recoverActiveMatch(sid, match);
-          return;
-        }
-        if (active.status === "waiting" && active.queueId) {
-          pollExistingQueue(sid, active.queueId);
-          return;
-        }
-        if (balances.game < stakeAmount) {
-          toast.error("Insufficient balance in Game Wallet");
-          navigate("/game/reaction-tap");
-        } else {
-          setGameState("idle");
-        }
-      } catch {
-        // A transient recovery read failure is not proof that the backend search
-        // ended. Leave the room usable and let the user retry; never route them out.
-        if (!cancelled) setGameState("idle");
-      }
-    };
-    void restore();
-    return () => {
-      cancelled = true;
-      stopAllTimers();
-    };
-  }, [stakeAmount, privateMatchId, balances.game, navigate, enterQueue, recoverActiveMatch, pollExistingQueue, stopAllTimers]); // re-run when recovery route is attached after backend state is checked
-
-  // Keep an active backend search alive while this page is connected.
-  // If the page/browser/network disappears, the backend lease expires and the
-  // queue stops being matchable instead of becoming a ghost search.
-  useEffect(() => {
-    if (!queueId || gameState !== "searching") return;
-    const beat = () => { void gameMatchmakingService.heartbeatQueue(queueId).catch(() => {}); };
-    beat();
-    const heartbeat = setInterval(beat, 5000);
-    return () => clearInterval(heartbeat);
-  }, [queueId, gameState]);
+    enterQueue(sid);
+    return () => stopAllTimers();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Handle tap ─────────────────────────────────────────────────────────────────
   const handleTap = useCallback(async () => {
@@ -499,29 +402,6 @@ export default function ReactionTapGameRoom() {
   }, [gameState, pollForResult]);
 
 
-  const handleSearchNewOpponent = useCallback(() => {
-    stopAllTimers();
-    setShowResultPopup(false);
-    setMatchId(null);
-    matchIdRef.current = null;
-    setMatchData(null);
-    setQueueId(null);
-    setOpponentName("");
-    setOpponentAvatar("P");
-    setCountdownValue(5);
-    setTappedEarly(false);
-    setYourTapTime(null);
-    setOpponentTapTime(null);
-    setLiveReactionTime(0);
-    setIsWinner(false);
-    setIsVoided(false);
-    setWinAmount(0);
-    setPlatformFee(0);
-    gameEndedRef.current = false;
-    setGameState("searching");
-    void enterQueue(sessionId.current, true);
-  }, [enterQueue, stopAllTimers]);
-
   const handleExit = useCallback(() => {
     stopAllTimers();
     if (roomCode) navigate(`/game/reaction-tap/private?roomCode=${roomCode}&stake=${stakeAmount}`);
@@ -529,8 +409,7 @@ export default function ReactionTapGameRoom() {
   }, [navigate, stopAllTimers, roomCode, stakeAmount]);
 
   // ── Derived display values ─────────────────────────────────────────────────────
-  const winnerPayout    = matchData?.payout ?? 0;
-  const displayedPool   = matchData?.totalPool ?? 0;
+  const winnerPayout    = stakeAmount * 2 * 0.9;
   const isTapDisabled   = gameState !== "signal_shown" && gameState !== "waiting_signal";
   const showLiveTimer   = gameState === "signal_shown" && yourTapTime === null;
 
@@ -539,48 +418,30 @@ export default function ReactionTapGameRoom() {
     <ResponsiveLayout>
       <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6">
         {/* Header */}
-        <div className="space-y-3 mb-6">
-          <div className="flex items-center">
-            <Button variant="ghost" size="sm" onClick={handleExit}
-              className="hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors px-3 -ml-3">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              <span className="text-sm font-medium">Back to stake room</span>
-            </Button>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-baseline gap-[6px]">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Tap Arena</h1>
-              <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
+        <div className="mb-4 sm:mb-6">
+          <Button variant="ghost" size="sm" onClick={handleExit}
+            className="mb-3 sm:mb-4 -ml-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800">
+            <ArrowLeft className="h-4 w-4 mr-2" />Exit Room
+          </Button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl">
+                <Zap className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">Reaction Arena</h1>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
+                  {formatCurrencyNoDecimals(stakeAmount)} Stake • First to tap wins
+                </p>
+              </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setShowRules(v => !v)}
-              className="border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 rounded-lg shrink-0">
-              <Info className="h-4 w-4 mr-2" />Rules
-            </Button>
-          </div>
-          {showRules && (
-            <Card className="border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-              <div className="p-4">
-                <h3 className="font-semibold text-gray-900 dark:text-white mb-2">How to Play</h3>
-                <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1.5 list-disc list-inside">
-                  <li>Wait until both players are ready and the signal appears.</li>
-                  <li>Do not tap before the signal. An early tap is recorded as an early loss.</li>
-                  <li>When <strong>TAP NOW</strong> appears, tap as quickly as possible.</li>
-                  <li>The backend compares both reaction times and determines the winner.</li>
-                  <li>The winner receives the backend-calculated payout after the platform fee.</li>
-                  <li>If both players tap early, the round is void and both stakes are refunded.</li>
-                </ul>
+            <Card className={`bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 transition-all duration-300 ${walletAnimation ? "scale-105" : ""}`}>
+              <div className="px-3 sm:px-4 py-2 sm:py-2.5">
+                <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 mb-0.5">Game Wallet</p>
+                <p className="text-base sm:text-xl font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(balances.game)}</p>
               </div>
             </Card>
-          )}
-          <Card className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700">
-            <div className="p-3 sm:p-4">
-              <div className="grid grid-cols-3 gap-2 divide-x divide-gray-200 dark:divide-gray-700">
-                <div className="text-center px-1"><div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Bet</div><div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(matchData?.stake ?? stakeAmount)}</div></div>
-                <div className="text-center px-1"><div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Pool</div><div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(displayedPool)}</div></div>
-                <div className="text-center px-1"><div className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Winner</div><div className="text-sm md:text-base font-bold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(winnerPayout)}</div></div>
-              </div>
-            </div>
-          </Card>
+          </div>
         </div>
 
         {/* Main */}
@@ -615,10 +476,7 @@ export default function ReactionTapGameRoom() {
               <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-800">
                 <div className="relative p-12 sm:p-16 text-center">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
-                  <div className="relative flex flex-col items-center">
-                    <div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block mb-6">
-                      Balance: {formatCurrencyNoDecimals(balances.game)}
-                    </div>
+                  <div className="relative">
                     <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mb-6 animate-pulse">
                       <Clock className="h-8 w-8 sm:h-10 sm:w-10 text-white animate-spin" style={{ animationDuration: "3s" }} />
                     </div>
@@ -735,7 +593,7 @@ export default function ReactionTapGameRoom() {
                     ))}
                   </div>
                   <div className="text-center py-8 sm:py-12">
-                    <p className="text-3xl sm:text-5xl font-black text-gray-900 dark:text-white mb-8 tracking-tight">WAIT...</p>
+                    <p className="text-4xl sm:text-6xl font-black text-gray-900 dark:text-white mb-8">WAIT...</p>
                     <div className="max-w-md mx-auto bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-2 border-red-300 dark:border-red-700 rounded-xl p-5 sm:p-6">
                       <div className="flex items-center gap-3 justify-center mb-3">
                         <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -778,11 +636,11 @@ export default function ReactionTapGameRoom() {
                   </div>
                   <div className="py-4 sm:py-6">
                     <Button onClick={handleTap} disabled={yourTapTime !== null}
-                      className="relative w-full h-28 sm:h-36 group disabled:opacity-50 disabled:cursor-not-allowed bg-transparent hover:bg-transparent border-0 p-0 touch-manipulation">
-                      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-3xl shadow-[0_18px_50px_-18px_rgba(20,184,166,0.65)]" />
+                      className="relative w-full h-24 sm:h-32 group disabled:opacity-50 disabled:cursor-not-allowed bg-transparent hover:bg-transparent border-0 p-0">
+                      <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-2xl" />
                       <div className="relative z-10 flex flex-col items-center justify-center h-full">
-                        <div className="text-3xl sm:text-5xl font-black text-white tracking-[0.18em] mb-2">TAP NOW</div>
+                        <div className="text-4xl sm:text-6xl font-black text-white tracking-wider mb-2">TAP NOW</div>
                         <div className="flex items-center gap-2 opacity-90">
                           <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-300" />
                           <p className="text-xs sm:text-sm font-bold text-green-100 tracking-wide">
@@ -795,7 +653,7 @@ export default function ReactionTapGameRoom() {
                     </Button>
                     {yourTapTime === null && (
                       <div className="text-center mt-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 border border-blue-200 dark:border-blue-800 rounded-lg py-2 px-4">
-                        <p className="text-sm font-bold text-gray-900 dark:text-white">Tap the moment the signal appears</p>
+                        <p className="text-sm font-bold text-gray-900 dark:text-white">Click or tap as fast as you can!</p>
                       </div>
                     )}
                   </div>
@@ -838,8 +696,7 @@ export default function ReactionTapGameRoom() {
                   <p className="text-gray-600 dark:text-gray-400">
                     {isVoided ? "Stakes refunded" : "Match completed • View results"}
                   </p>
-                </div>
-              </Card>
+                </div>              </Card>
             )}
           </div>
 
@@ -847,10 +704,11 @@ export default function ReactionTapGameRoom() {
           <div className="lg:col-span-1">
             <Card className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 sticky top-4">
               <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   <h3 className="font-bold text-gray-900 dark:text-white">Room Activity</h3>
-                  <span className="text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">{formatCurrencyNoDecimals(stakeAmount)} Stake Room</span>
                 </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{formatCurrencyNoDecimals(stakeAmount)} Stake Room</p>
               </div>
               <div className="p-4">
                 <ReactionTapGameHistory key={historyKey} stake={stakeAmount} />
@@ -860,55 +718,111 @@ export default function ReactionTapGameRoom() {
         </div>
       </div>
 
-      {/* Result Modal — compact, clearly modal, with close + fresh matchmaking */}
+      {/* Result Modal */}
       <Dialog open={showResultPopup} onOpenChange={setShowResultPopup}>
-        <DialogContent hideClose className="w-[calc(100vw-32px)] max-w-[430px] max-h-[82vh] overflow-y-auto rounded-3xl border border-white/10 bg-slate-950 text-white shadow-2xl p-0">
-          <div className="relative overflow-hidden rounded-3xl">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(139,92,246,0.20),transparent_55%)] pointer-events-none" />
-            <DialogClose asChild>
-              <button type="button" aria-label="Close result" className="absolute right-4 top-4 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/80 backdrop-blur-md hover:bg-white/15 hover:text-white transition-colors">×</button>
-            </DialogClose>
-            <div className="relative p-5 sm:p-6">
-              <DialogHeader className="text-center pr-8">
-                <div className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl ${isWinner ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}>
-                  {isWinner ? <Trophy className="h-7 w-7" /> : <AlertCircle className="h-7 w-7" />}
+        <DialogContent className="max-w-[90vw] sm:max-w-md max-h-[85vh] overflow-y-auto bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+          <div className="p-4 sm:p-6">
+            <DialogHeader>
+              <div className="text-center">
+                <div className={`w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 rounded-full flex items-center justify-center ${isWinner ? "bg-gradient-to-br from-green-500 to-emerald-600" : "bg-gradient-to-br from-red-500 to-orange-600"}`}>
+                  <div className="text-white">
+                    {isWinner ? <Trophy className="h-8 w-8 sm:h-10 sm:w-10" /> : <AlertCircle className="h-8 w-8 sm:h-10 sm:w-10" />}
+                  </div>
                 </div>
-                <DialogTitle className={`text-2xl font-black tracking-tight ${isWinner ? "text-emerald-300" : "text-rose-300"}`}>
-                  {isVoided ? "Round Void" : isWinner ? "You Win" : tappedEarly ? "Too Early" : "You Lose"}
+                <DialogTitle className={`text-2xl sm:text-3xl font-black mb-2 ${isWinner ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                  {isVoided ? "ROUND VOID" : isWinner ? "VICTORY!" : tappedEarly ? "TOO EARLY!" : "DEFEAT"}
                 </DialogTitle>
-                <DialogDescription className="text-slate-400 mt-1">Reaction Tap result</DialogDescription>
-              </DialogHeader>
+                <DialogDescription className="sr-only">
+                  {isWinner ? "You won the reaction tap match" : "You lost the reaction tap match"}
+                </DialogDescription>
+              </div>
+            </DialogHeader>
 
-              <div className="mt-5 space-y-3">
-                {isVoided ? (
-                  <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-center text-sm text-amber-200">Both players tapped early. Stakes were refunded.</div>
-                ) : (
-                  <>
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center">
-                      <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Your Result</div>
-                      <div className={`mt-1 text-3xl font-black ${isWinner ? "text-emerald-300" : "text-rose-300"}`}>
-                        {isWinner ? "+" : "-"}{formatCurrencyNoDecimals(isWinner ? winAmount - stakeAmount : stakeAmount)}
-                      </div>
-                    </div>
-                    {!tappedEarly && yourTapTime !== null && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-2xl border border-blue-400/15 bg-blue-400/10 p-3 text-center"><div className="text-xs text-slate-400">You</div><div className="mt-1 font-bold text-blue-200">{formatTime(yourTapTime)}</div></div>
-                        <div className="rounded-2xl border border-rose-400/15 bg-rose-400/10 p-3 text-center"><div className="text-xs text-slate-400">{opponentName}</div><div className="mt-1 font-bold text-rose-200">{formatTime(opponentTapTime)}</div></div>
-                      </div>
-                    )}
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm">
-                      <div className="flex justify-between"><span className="text-slate-400">Stake</span><span className="font-semibold">{formatCurrencyNoDecimals(matchData?.stake ?? stakeAmount)}</span></div>
-                      <div className="mt-1 flex justify-between"><span className="text-slate-400">Pool</span><span className="font-semibold">{formatCurrencyNoDecimals(matchData?.totalPool ?? 0)}</span></div>
-                      <div className="mt-1 flex justify-between"><span className="text-slate-400">Platform fee</span><span className="font-semibold">{formatCurrencyNoDecimals(matchData?.platformFee ?? platformFee)}</span></div>
-                      <div className="mt-2 border-t border-white/10 pt-2 flex justify-between"><span className="font-semibold">Payout</span><span className="font-bold text-emerald-300">{formatCurrencyNoDecimals(winAmount)}</span></div>
-                    </div>
-                  </>
-                )}
-
-                <div className="flex flex-col gap-2 pt-1">
-                  <Button onClick={handleSearchNewOpponent} className="h-12 w-full rounded-2xl bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500 text-white font-bold shadow-lg shadow-purple-500/20 hover:from-violet-400 hover:via-purple-400 hover:to-fuchsia-400">Search New Opponent</Button>
-                  <Button onClick={handleExit} variant="outline" className="h-11 w-full rounded-2xl border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.08]">Back to Stake Selection</Button>
+            <div className="space-y-4 mt-3">
+              {isVoided && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3 border border-amber-200 dark:border-amber-800 text-center">
+                  <p className="text-sm text-amber-700 dark:text-amber-300 font-semibold">Both players tapped early. Stakes fully refunded.</p>
                 </div>
+              )}
+
+              {!isVoided && !tappedEarly && yourTapTime !== null && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 uppercase tracking-wider font-semibold">Match Results</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm overflow-hidden">
+                          <PlayerAvatar avatar={identity.avatar} />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{myUsername}</span>
+                      </div>
+                      <span className="text-base font-black text-blue-600 dark:text-blue-400">{formatTime(yourTapTime)}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center text-sm overflow-hidden">
+                          <PlayerAvatar avatar={opponentAvatar} />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{opponentName}</span>
+                      </div>
+                      <span className="text-base font-black text-red-600 dark:text-red-400">{formatTime(opponentTapTime)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tappedEarly && !isVoided && (
+                <div className="bg-red-500/10 dark:bg-red-500/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
+                  <p className="text-sm text-red-700 dark:text-red-300 font-semibold text-center">{myUsername} tapped before the signal!</p>
+                </div>
+              )}
+
+              {!isVoided && (
+                <>
+                  <div className="text-center py-4">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wider font-semibold">
+                      {isWinner ? `${myUsername} Won` : `${myUsername} Lost`}
+                    </p>
+                    <div className={`text-4xl sm:text-5xl font-black ${isWinner ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                      {isWinner ? "+" : "-"}{formatCurrencyNoDecimals(isWinner ? winAmount - stakeAmount : stakeAmount)}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Stake</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(stakeAmount)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Pool</span>
+                        <span className="font-semibold text-yellow-600 dark:text-yellow-400">{formatCurrencyNoDecimals(stakeAmount * 2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Fee (10%)</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">{formatCurrencyNoDecimals(platformFee)}</span>
+                      </div>
+                      <div className="pt-1.5 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+                        <span className="text-gray-900 dark:text-white font-bold">Payout</span>
+                        <span className="font-bold text-green-600 dark:text-green-400">{formatCurrencyNoDecimals(winAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Game Wallet</span>
+                  <span className="text-lg font-black text-gray-900 dark:text-white">{formatCurrencyNoDecimals(balances.game)}</span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <Button onClick={handleExit} variant="outline"
+                  className="w-full h-11 sm:h-12 border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white font-semibold hover:bg-gray-50 dark:hover:bg-gray-800">
+                  Back to Stake Selection
+                </Button>
               </div>
             </div>
           </div>
