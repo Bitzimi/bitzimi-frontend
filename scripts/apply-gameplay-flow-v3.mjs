@@ -129,7 +129,7 @@ const write = (p, s) => fs.writeFileSync(p, s);
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-baseline gap-[6px]">
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Reaction Arena</h1>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap">Tap Arena</h1>
               <span className="text-sm text-gray-500 whitespace-nowrap">- Stake Room {formatCurrencyNoDecimals(stakeAmount)}</span>
             </div>
             <Button variant="outline" size="sm" onClick={() => setShowRules(!showRules)}
