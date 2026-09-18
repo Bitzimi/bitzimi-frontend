@@ -54,6 +54,7 @@ export default function ReactionTapGameRoom() {
   const stakeAmount  = parseInt(searchParams.get("stake") || "1");
   const privateMatchId = searchParams.get("matchId");
   const roomCode = searchParams.get("roomCode");
+  const recoverySearch = searchParams.get("recovery") === "search";
 
   const { formatCurrencyNoDecimals } = useSettings();
   // Wallet — backend controls all balance changes.
@@ -65,7 +66,7 @@ export default function ReactionTapGameRoom() {
   const myUsername   = identity.username;
 
   // ── Core game state ──────────────────────────────────────────────────────────
-  const [gameState,        setGameState]        = useState<GameState>("searching");
+  const [gameState,        setGameState]        = useState<GameState>(privateMatchId || recoverySearch ? "searching" : "idle");
   const [opponentName,     setOpponentName]     = useState("");
   const [opponentAvatar,   setOpponentAvatar]   = useState("P");
   const [queueId,          setQueueId]          = useState<string | null>(null);
@@ -311,7 +312,9 @@ export default function ReactionTapGameRoom() {
         return;
       }
 
-      const res = await gameMatchmakingService.joinQueue("reaction_tap", stakeAmount);
+      const res = recoverySearch
+        ? await gameMatchmakingService.getActiveMatchmaking("reaction_tap", stakeAmount)
+        : await gameMatchmakingService.joinQueue("reaction_tap", stakeAmount);
       if (sessionId.current !== sid) return;
 
       if (res.status === "matched" && res.matchId) {
@@ -360,9 +363,12 @@ export default function ReactionTapGameRoom() {
     }
     // Backend deducts stakes when match is created — no local decrementBalance
     const sid = sessionId.current;
-    enterQueue(sid);
+    if (privateMatchId || recoverySearch) {
+      setGameState("searching");
+      enterQueue(sid);
+    }
     return () => stopAllTimers();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [privateMatchId, recoverySearch]); // re-run when recovery route is attached after backend state is checked
 
   // ── Handle tap ─────────────────────────────────────────────────────────────────
   const handleTap = useCallback(async () => {
