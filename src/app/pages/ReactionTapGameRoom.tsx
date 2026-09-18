@@ -483,7 +483,10 @@ export default function ReactionTapGameRoom() {
               <Card className="bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-800">
                 <div className="relative p-12 sm:p-16 text-center">
                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5" />
-                  <div className="relative">
+                  <div className="relative flex flex-col items-center">
+                    <div className="text-xs text-gray-700 dark:text-gray-400 bg-gray-200 dark:bg-gray-800/50 rounded px-3 py-1 inline-block mb-6">
+                      Balance: {formatCurrencyNoDecimals(balances.game)}
+                    </div>
                     <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mb-6 animate-pulse">
                       <Clock className="h-8 w-8 sm:h-10 sm:w-10 text-white animate-spin" style={{ animationDuration: "3s" }} />
                     </div>
