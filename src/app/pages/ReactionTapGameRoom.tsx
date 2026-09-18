@@ -352,7 +352,7 @@ export default function ReactionTapGameRoom() {
         }, 2000);
       }
     } catch { navigate("/game/reaction-tap"); }
-  }, [stakeAmount, navigate, startCountdown, privateMatchId]);
+  }, [stakeAmount, navigate, startCountdown, privateMatchId, recoverySearch]);
 
   // ── Mount: balance check + enter queue ────────────────────────────────────────
   useEffect(() => {
