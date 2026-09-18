@@ -71,6 +71,14 @@ const write = (p, s) => fs.writeFileSync(p, s);
     'className="text-center flex flex-col items-center justify-center"'
   );
 
+  // Keep the active searching card vertically stacked: balance first, then the
+  // purple finding-opponent animation. This is explicit so surrounding markup
+  // cannot place the two elements on the same row.
+  s = s.replace(
+    /(\\{\\/\\* Searching \\*\\/\\}[\\s\\S]*?<div className=")relative(")/,
+    '$1relative flex flex-col items-center$2'
+  );
+
   write(p, s);
 }
 
