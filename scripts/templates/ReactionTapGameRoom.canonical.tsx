@@ -449,6 +449,17 @@ export default function ReactionTapGameRoom() {
     };
   }, [stakeAmount, privateMatchId, balances.game, navigate, enterQueue, recoverActiveMatch, pollExistingQueue, stopAllTimers]); // re-run when recovery route is attached after backend state is checked
 
+  // Keep an active backend search alive while this page is connected.
+  // If the page/browser/network disappears, the backend lease expires and the
+  // queue stops being matchable instead of becoming a ghost search.
+  useEffect(() => {
+    if (!queueId || gameState !== "searching") return;
+    const beat = () => { void gameMatchmakingService.heartbeatQueue(queueId).catch(() => {}); };
+    beat();
+    const heartbeat = setInterval(beat, 5000);
+    return () => clearInterval(heartbeat);
+  }, [queueId, gameState]);
+
   // ── Handle tap ─────────────────────────────────────────────────────────────────
   const handleTap = useCallback(async () => {
     const sid = sessionId.current;
